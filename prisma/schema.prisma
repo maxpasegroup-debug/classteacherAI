@@ -1,0 +1,550 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+  engineType = "binary"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  TEACHER
+  STUDENT
+}
+
+enum NexaMode {
+  TEACHER
+  STUDENT
+}
+
+enum NexaCapability {
+  LESSON_PLANNING
+  DOUBT_SOLVING
+  NOTES_GENERATION
+  CONCEPT_TEACHING
+  EXAM_TIPS
+  CONTENT_CREATION
+}
+
+enum ChatMessageRole {
+  USER
+  ASSISTANT
+}
+
+enum SubscriptionPlan {
+  BASIC
+  PRO
+  TOP10
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+}
+
+enum TransactionType {
+  SUBSCRIPTION
+  CREDIT_PURCHASE
+}
+
+enum TransactionStatus {
+  CREATED
+  PAID
+  FAILED
+}
+
+enum BookingStatus {
+  REQUESTED
+  CONFIRMED
+  COMPLETED
+  CANCELED
+}
+
+enum ExamType {
+  MOCK
+  PRACTICE
+}
+
+model User {
+  id             String             @id @default(cuid())
+  name           String
+  email          String             @unique
+  password       String
+  roles          UserRole[]           @default([])
+  plan           SubscriptionPlan   @default(BASIC)
+  subscriptionStatus SubscriptionStatus @default(ACTIVE)
+  /// Current plan period end (trial end for BASIC, billing period end for paid tiers).
+  planExpiry     DateTime?
+  /// AI usage credits (Nexa, teacher generate, etc.); TOP10 gets a very large grant.
+  aiCredits      Int                @default(0)
+  /// Optional Nexa context (student): grade/class level, e.g. "Grade 9", "Class 12"
+  nexaStudentLevel   String?
+  /// Primary subject the student is studying in Nexa
+  nexaStudentSubject String?
+  /// Primary subject the teacher teaches (Nexa context)
+  nexaTeacherSubject String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  passwordResets PasswordResetOtp[]
+  conversations  Conversation[]
+  transactions   Transaction[]
+  teacherProfile TeacherProfile?
+  teacherReviews TeacherReview[]    @relation("teacherReviews")
+  studentReviews TeacherReview[]    @relation("studentReviews")
+  studentPerformances StudentPerformance[]
+  bookingsAsTeacher SessionBooking[] @relation("teacherBookings")
+  bookingsAsStudent SessionBooking[] @relation("studentBookings")
+  earningLedgers EarningLedger[]
+  examAttempts ExamAttempt[]
+  courseProgress CourseProgress[]
+  certificates Certificate[]
+  assessments AssessmentAttempt[]
+  careerReports CareerReport[]
+  notifications Notification[]
+  usageStats UsageStat[]
+  teacherStudents TeacherStudent[] @relation("TeacherStudents")
+  helpRequestsAsStudent StudentHelpRequest[] @relation("StudentHelpRequests")
+  helpRequestsAsTeacher StudentHelpRequest[] @relation("MatchedTeacherHelp")
+  top10TrainingState Top10TrainingState?
+  nexaStudentMemory NexaStudentMemory?
+  performanceAttemptMetrics PerformanceAttemptMetric[]
+  performanceTopicStats PerformanceTopicStat[]
+  performanceDailySnapshots PerformanceDailySnapshot[]
+  performanceInsightRecords PerformanceInsightRecord[]
+}
+
+/// Per-submitted-attempt analytics (source for progress charts and aggregates).
+model PerformanceAttemptMetric {
+  id                   String   @id @default(cuid())
+  attemptId            String   @unique
+  userId               String
+  examId               String
+  subject              String
+  accuracyPct          Float
+  timeSpentSec         Int
+  questionCount        Int
+  secondsPerQuestion   Float
+  /// Wrong counts keyed by topicKey (subject|level)
+  wrongByTopic         Json     @default("{}")
+  rankReadinessSnapshot Int?
+  createdAt            DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, subject])
+}
+
+/// Rolling topic-level mastery (answered vs correct) for heatmaps and focus tips.
+model PerformanceTopicStat {
+  id        String   @id @default(cuid())
+  userId    String
+  topicKey  String
+  subject   String
+  label     String
+  answered  Int      @default(0)
+  correct   Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, topicKey])
+  @@index([userId, subject])
+}
+
+/// Daily aggregates for improvement charts (updated on each attempt).
+model PerformanceDailySnapshot {
+  id                     String   @id @default(cuid())
+  userId                 String
+  /// UTC calendar day as YYYY-MM-DD
+  dayKey                 String
+  avgAccuracy            Float
+  attemptCount           Int
+  avgSecondsPerQuestion  Float
+  /// 0–100: higher = steadier accuracy across attempts that day
+  consistencyScore       Float?
+  updatedAt              DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dayKey])
+  @@index([userId, dayKey])
+}
+
+/// Persisted insight lines (rule-based + deltas); shown in performance UI.
+model PerformanceInsightRecord {
+  id              String   @id @default(cuid())
+  userId          String
+  message         String
+  kind            String
+  relatedSubject  String?
+  relatedTopic    String?
+  createdAt       DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+/// Rolling performance context for Nexa (TOP10 AI Trainer) — updated on exam submit.
+model NexaStudentMemory {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  weakTopics       String[] @default([])
+  /// 0–100 estimate of competition readiness from recent exam accuracy.
+  rankReadiness    Int      @default(50)
+  examCount        Int      @default(0)
+  lastAccuracyPct  Float?
+  lastExamAt       DateTime?
+  /// Last few debrief snapshots: { at, examId, accuracyPct, wrongCount, subject }
+  history          Json?
+  updatedAt        DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PasswordResetOtp {
+  id         String   @id @default(cuid())
+  userId     String
+  codeHash   String
+  expiresAt  DateTime
+  verifiedAt DateTime?
+  consumedAt DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model Conversation {
+  id         String          @id @default(cuid())
+  userId     String
+  title      String
+  mode       NexaMode
+  capability NexaCapability
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages ChatMessage[]
+
+  @@index([userId, updatedAt])
+}
+
+model ChatMessage {
+  id             String          @id @default(cuid())
+  conversationId String
+  role           ChatMessageRole
+  content        String
+  createdAt      DateTime        @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}
+
+model Transaction {
+  id                String            @id @default(cuid())
+  userId            String
+  type              TransactionType
+  amount            Int
+  status            TransactionStatus @default(CREATED)
+  plan              SubscriptionPlan?
+  creditsPurchased  Int?
+  razorpayOrderId   String?           @unique
+  razorpayPaymentId String?           @unique
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model TeacherProfile {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  bio         String?
+  subjects    String[]
+  hourlyRate  Int      @default(199)
+  avgRating   Float    @default(0)
+  totalReviews Int     @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model TeacherReview {
+  id         String   @id @default(cuid())
+  teacherId  String
+  studentId  String
+  rating     Int
+  review     String?
+  createdAt  DateTime @default(now())
+
+  teacher User @relation("teacherReviews", fields: [teacherId], references: [id], onDelete: Cascade)
+  student User @relation("studentReviews", fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([teacherId, createdAt])
+}
+
+model SessionBooking {
+  id         String       @id @default(cuid())
+  teacherId  String
+  studentId  String
+  subject    String
+  scheduledAt DateTime
+  status     BookingStatus @default(REQUESTED)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  teacher User @relation("teacherBookings", fields: [teacherId], references: [id], onDelete: Cascade)
+  student User @relation("studentBookings", fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+model EarningLedger {
+  id         String   @id @default(cuid())
+  userId     String
+  amount     Int
+  source     String
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model StudentPerformance {
+  id         String   @id @default(cuid())
+  studentId  String
+  subject    String
+  score      Float
+  weakAreas  String[]
+  createdAt  DateTime @default(now())
+
+  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, createdAt])
+}
+
+model QuestionBank {
+  id          String   @id @default(cuid())
+  subject     String
+  level       String
+  question    String
+  options     String[]
+  answer      String
+  explanation String?
+  createdAt   DateTime @default(now())
+}
+
+model Exam {
+  id          String    @id @default(cuid())
+  title       String
+  subject     String
+  durationMin Int
+  type        ExamType  @default(MOCK)
+  createdAt   DateTime  @default(now())
+  attempts    ExamAttempt[]
+}
+
+model ExamAttempt {
+  id          String   @id @default(cuid())
+  examId      String
+  userId      String
+  score       Float    @default(0)
+  maxScore    Float    @default(0)
+  startedAt   DateTime @default(now())
+  submittedAt DateTime?
+  /// PRACTICE | ADVANCED | TOP10 when started from training modes
+  trainingMode String?
+  surpriseReal Boolean @default(false)
+  dailyChallenge Boolean @default(false)
+  /// When set, submit timer uses this instead of exam.durationMin (e.g. surprise simulation).
+  allowedSeconds Int?
+
+  exam Exam @relation(fields: [examId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// Persistent TOP10 Rank Training loop (exam → analysis → practice → re-test).
+model Top10TrainingState {
+  id                   String    @id @default(cuid())
+  userId               String    @unique
+  /// IDLE | EXAM | RESULT | ANALYSIS | PRACTICE | RETRY
+  phase                String    @default("IDLE")
+  difficulty           Int       @default(2)
+  weakTopics           String[]  @default([])
+  circuitCount         Int       @default(0)
+  streakPasses         Int       @default(0)
+  lastAttemptId        String?
+  lastExamId           String?
+  pendingRetry         Boolean   @default(false)
+  lastWrongQuestionIds String[]  @default([])
+  lastAccuracyPct      Float?
+  /// UTC day start when daily challenge was last assigned
+  dailyChallengeDate   DateTime?
+  updatedAt            DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Course {
+  id         String   @id @default(cuid())
+  title      String
+  category   String
+  description String
+  videoUrl   String?
+  createdAt  DateTime @default(now())
+  lessons    Lesson[]
+  progress   CourseProgress[]
+}
+
+model Lesson {
+  id         String   @id @default(cuid())
+  courseId   String
+  title      String
+  videoUrl   String
+  createdAt  DateTime @default(now())
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+}
+
+model CourseProgress {
+  id          String   @id @default(cuid())
+  courseId    String
+  userId      String
+  progressPct Float    @default(0)
+  updatedAt   DateTime @updatedAt
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, userId])
+}
+
+model Certificate {
+  id        String   @id @default(cuid())
+  userId    String
+  courseId  String
+  issuedAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+}
+
+model AssessmentAttempt {
+  id         String   @id @default(cuid())
+  userId     String
+  answers    Json
+  score      Float
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model CareerReport {
+  id                 String   @id @default(cuid())
+  userId             String
+  strengths          String[]
+  careerSuggestions  String[]
+  summary            String
+  createdAt          DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id         String   @id @default(cuid())
+  userId     String
+  title      String
+  message    String
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model UsageStat {
+  id         String   @id @default(cuid())
+  userId     String
+  day        DateTime
+  aiRequests Int      @default(0)
+  /// Cumulative prompt tokens (OpenAI) for this UTC day — cost control + monitoring.
+  aiTokensPrompt     Int @default(0)
+  /// Cumulative completion tokens for this UTC day.
+  aiTokensCompletion Int @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([userId, day])
+}
+
+model TeacherStudent {
+  id        String   @id @default(cuid())
+  teacherId String
+  name      String
+  email     String?
+  grade     String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  teacher User @relation("TeacherStudents", fields: [teacherId], references: [id], onDelete: Cascade)
+  attendances AttendanceRecord[]
+  marks       MarkEntry[]
+
+  @@index([teacherId])
+}
+
+model AttendanceRecord {
+  id               String   @id @default(cuid())
+  teacherStudentId String
+  date             DateTime
+  present          Boolean  @default(true)
+
+  teacherStudent TeacherStudent @relation(fields: [teacherStudentId], references: [id], onDelete: Cascade)
+
+  @@unique([teacherStudentId, date])
+}
+
+model MarkEntry {
+  id               String   @id @default(cuid())
+  teacherStudentId String
+  subject          String
+  title            String?
+  score            Float
+  maxScore         Float
+  term             String?
+  createdAt        DateTime @default(now())
+
+  teacherStudent TeacherStudent @relation(fields: [teacherStudentId], references: [id], onDelete: Cascade)
+
+  @@index([teacherStudentId, createdAt])
+}
+
+model StudentHelpRequest {
+  id                 String   @id @default(cuid())
+  studentId          String
+  topic              String
+  subject            String?
+  status             String   @default("OPEN")
+  matchedTeacherId   String?
+  createdAt          DateTime @default(now())
+
+  student User @relation("StudentHelpRequests", fields: [studentId], references: [id], onDelete: Cascade)
+  matchedTeacher User? @relation("MatchedTeacherHelp", fields: [matchedTeacherId], references: [id], onDelete: SetNull)
+
+  @@index([studentId, createdAt])
+}

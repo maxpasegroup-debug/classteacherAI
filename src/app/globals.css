@@ -2,7 +2,7 @@
 
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #0f172a;
 }
 
 @theme inline {
@@ -12,15 +12,61 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  scroll-behavior: smooth;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Subtle premium scrollbars */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.32), rgba(16, 185, 129, 0.3));
+  border-radius: 999px;
+  border: 2px solid #ffffff;
+}
+::-webkit-scrollbar-track {
+  background: #f8fafc;
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 280ms ease-out both;
+}
+
+/* Elite training typography — strong hierarchy, minimal noise */
+.font-training-display {
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+
+.text-training-muted {
+  color: rgb(100 116 139);
+}
+
+/* Subtle mesh for elite headers (light mode) */
+.bg-elite-mesh {
+  background-color: #fafafa;
+  background-image:
+    radial-gradient(ellipse 80% 60% at 50% -30%, rgba(99, 102, 241, 0.09), transparent),
+    radial-gradient(ellipse 60% 50% at 100% 0%, rgba(16, 185, 129, 0.06), transparent);
 }

@@ -1,36 +1,107 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ClassteacherAI
 
-## Getting Started
+Production-ready Next.js (App Router) app with:
+- JWT auth (teacher/student)
+- Nexa AI chat (OpenAI, streaming)
+- Razorpay subscriptions and credits
+- PostgreSQL + Prisma
 
-First, run the development server:
+## Local development
 
+1. Copy env file:
+```bash
+cp .env.example .env
+```
+2. Install deps:
+```bash
+npm install
+```
+3. Apply database migrations:
+```bash
+npx prisma migrate dev
+```
+4. Start app:
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Required environment variables
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Set all values from `.env.example`:
+- `DATABASE_URL`
+- `JWT_SECRET`
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL`
+- `BREVO_API_KEY`
+- `BREVO_SENDER_EMAIL`
+- `BREVO_SENDER_NAME`
+- `RAZORPAY_KEY_ID`
+- `RAZORPAY_KEY_SECRET`
+- `RAZORPAY_WEBHOOK_SECRET`
+- `NEXT_PUBLIC_APP_URL`
+- `NODE_ENV`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Railway deployment (frontend + backend together)
 
-## Learn More
+This app deploys as a single Railway service (Next.js server handles both UI and API routes).
 
-To learn more about Next.js, take a look at the following resources:
+### 1) Create Railway project
+- Connect repo to Railway.
+- Railway auto-detects `railway.json`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 2) Add Postgres on Railway
+- Add Railway Postgres plugin.
+- Copy generated connection string into `DATABASE_URL`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 3) Configure env variables in Railway
+- Add all required env vars listed above.
+- Use production keys for OpenAI, Brevo, and Razorpay.
 
-## Deploy on Vercel
+### 4) Deploy
+- Railway will run install/build.
+- Start command runs:
+  - `prisma migrate deploy`
+  - `next start -p $PORT`
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### 5) Configure Razorpay webhook
+- Endpoint: `https://<your-railway-domain>/api/payments/webhook`
+- Event subscriptions:
+  - `payment.captured`
+  - `payment.failed`
+- Set webhook secret in `RAZORPAY_WEBHOOK_SECRET`.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Health and operations
+
+- Health check endpoint: `/api/health`
+- Railway healthcheck is configured to use this endpoint.
+
+## Post-deploy verification checklist
+
+### Auth
+- Sign up as Teacher and Student.
+- Login and verify role redirects:
+  - Teacher -> `/teacher/dashboard`
+  - Student -> `/student/dashboard`
+- Verify protected routes redirect unauthenticated users to `/auth/login`.
+
+### Payments
+- Open `/pricing` and buy a plan using Razorpay test mode.
+- Open `/credits` and buy a credit pack.
+- Confirm:
+  - user `plan` updates
+  - user `credits` increments
+  - `Transaction` row status becomes `PAID`
+- Trigger webhook event and confirm idempotent updates.
+
+### AI
+- Open `/nexa`.
+- Send prompt and verify streaming response.
+- Verify conversation and messages persist in DB.
+
+## Useful commands
+
+```bash
+npm run lint
+npm run build
+npm run migrate:deploy
+```
