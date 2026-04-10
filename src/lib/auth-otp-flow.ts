@@ -21,7 +21,10 @@ export async function handleSendOtp(request: Request) {
     }
 
     const { email } = parsed.data;
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, email: true, name: true },
+    });
 
     if (!user) {
       return NextResponse.json({
@@ -71,7 +74,10 @@ export async function handleVerifyOtp(request: Request) {
     }
 
     const { email, otp } = parsed.data;
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
     if (!user) {
       return authJsonError("Invalid or expired code.", 400);
     }
@@ -107,7 +113,9 @@ export async function handleResetPassword(request: Request) {
     const parsed = resetPasswordSchema.safeParse(body);
 
     if (!parsed.success) {
-      return authJsonError("Invalid password reset request.", 400);
+      const fe = parsed.error.flatten().fieldErrors;
+      const msg = fe.newPassword?.[0] ?? fe.resetToken?.[0] ?? "Invalid password reset request.";
+      return authJsonError(msg, 400);
     }
 
     const { resetToken, newPassword } = parsed.data;
@@ -134,7 +142,11 @@ export async function handleResetPassword(request: Request) {
 
     const hashedPassword = await hashPassword(newPassword);
     await prisma.$transaction([
-      prisma.user.update({ where: { id: decoded.userId }, data: { password: hashedPassword } }),
+      prisma.user.update({
+        where: { id: decoded.userId },
+        data: { password: hashedPassword },
+        select: { id: true },
+      }),
       prisma.passwordResetOtp.update({ where: { id: otpRecord.id }, data: { consumedAt: new Date() } }),
     ]);
 

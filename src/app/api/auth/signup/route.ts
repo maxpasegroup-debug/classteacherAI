@@ -13,7 +13,9 @@ export async function POST(req: Request) {
     const parsed = signupStudentSchema.safeParse(body);
 
     if (!parsed.success) {
-      const msg = parsed.error.flatten().fieldErrors.password?.[0] ?? parsed.error.flatten().fieldErrors.name?.[0] ?? "Please check your details.";
+      const fe = parsed.error.flatten().fieldErrors;
+      const msg =
+        fe.email?.[0] ?? fe.password?.[0] ?? fe.name?.[0] ?? "Please check your details.";
       return authJsonError(msg, 400);
     }
 

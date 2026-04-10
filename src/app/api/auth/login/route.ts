@@ -14,7 +14,9 @@ export async function POST(req: Request) {
     const parsed = loginSchema.safeParse(body);
 
     if (!parsed.success) {
-      return authJsonError("Enter a valid email and password.", 400);
+      const fe = parsed.error.flatten().fieldErrors;
+      const msg = fe.email?.[0] ?? fe.password?.[0] ?? "Enter a valid email and password.";
+      return authJsonError(msg, 400);
     }
 
     const { email, password } = parsed.data;
@@ -53,6 +55,7 @@ export async function POST(req: Request) {
       where: { id: user.id },
       select: {
         id: true,
+        name: true,
         email: true,
         roles: true,
         plan: true,
@@ -74,9 +77,9 @@ export async function POST(req: Request) {
     return Response.json({
       success: true,
       user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
+        id: refreshed.id,
+        name: refreshed.name,
+        email: refreshed.email,
       },
       redirectTo: onboardingCompleted ? "/dashboard" : "/onboarding",
     });

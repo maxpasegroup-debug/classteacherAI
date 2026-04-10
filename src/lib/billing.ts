@@ -153,6 +153,3 @@ export function creditsForNewSubscription(plan: SubscriptionPlan): number {
   if (plan === "TOP10") return PLANS.TOP10.creditsIncluded;
   return 0;
 }
-
-/** @deprecated Use creditsForNewSubscription */
-export const aiCreditsForNewSubscription = creditsForNewSubscription;
