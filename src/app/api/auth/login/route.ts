@@ -21,6 +21,13 @@ export async function POST(req: Request) {
 
     const user = await prisma.user.findUnique({
       where: { email },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        password: true,
+        roles: true,
+      },
     });
 
     if (!user) {
@@ -37,13 +44,22 @@ export async function POST(req: Request) {
       await prisma.user.update({
         where: { id: user.id },
         data: { roles: [...user.roles, "STUDENT"] },
+        select: { id: true },
       });
     }
 
     await applyPlanExpiry(user.id);
     const refreshed = await prisma.user.findUnique({
       where: { id: user.id },
-      include: { studentProfile: { select: { onboardingCompleted: true } } },
+      select: {
+        id: true,
+        email: true,
+        roles: true,
+        plan: true,
+        subscriptionExpiry: true,
+        credits: true,
+        studentProfile: { select: { onboardingCompleted: true } },
+      },
     });
     if (!refreshed) {
       return authJsonError("Login failed. Please try again.", 500);

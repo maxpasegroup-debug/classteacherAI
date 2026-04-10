@@ -19,7 +19,10 @@ export async function POST(req: Request) {
 
     const { name, email, password } = parsed.data;
 
-    const existingUser = await prisma.user.findUnique({ where: { email } });
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
 
     if (existingUser) {
       return authJsonError("An account with this email already exists.", 409);
@@ -37,6 +40,13 @@ export async function POST(req: Request) {
         subscriptionStatus: "EXPIRED",
         subscriptionExpiry: null,
         credits: 0,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        roles: true,
+        plan: true,
       },
     });
 
