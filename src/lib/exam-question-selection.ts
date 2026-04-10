@@ -6,6 +6,7 @@ export type QuestionPick = {
   id: string;
   level: string;
   question: string;
+  options: string[];
 };
 
 function bucketLevel(level: string): "easy" | "mid" | "hard" {
