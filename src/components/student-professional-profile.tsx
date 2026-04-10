@@ -15,11 +15,9 @@ function formatRenewal(d: Date | null) {
 }
 
 function statusLabel(status: SubscriptionStatus, paidActive: boolean) {
-  if (!paidActive && (status === "ACTIVE" || status === "TRIAL")) return "Preview / limited";
-  if (status === "ACTIVE") return "Active";
   if (status === "EXPIRED") return "Expired";
-  if (status === "CANCELLED") return "Cancelled";
-  return status;
+  // ACTIVE — only other Prisma enum value today
+  return paidActive ? "Active" : "Preview / limited";
 }
 
 type Vision = {
