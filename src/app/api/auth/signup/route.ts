@@ -20,6 +20,7 @@ export async function POST(req: Request) {
     }
 
     const { name, email, password } = parsed.data;
+    console.log("SIGNUP:", email);
 
     const existingUser = await prisma.user.findUnique({
       where: { email },
