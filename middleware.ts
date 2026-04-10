@@ -41,8 +41,27 @@ export function middleware(request: NextRequest) {
     if (isApi) {
       return NextResponse.json({ error: "Forbidden.", code: "FORBIDDEN" }, { status: 403 });
     }
-    const fallback = session?.activeRole === "TEACHER" ? "/teacher/dashboard" : "/student/today";
-    return NextResponse.redirect(new URL(fallback, request.url));
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
+  const onboardingCompleted = Boolean(session?.onboardingCompleted);
+  const publicPaths = pathname === "/" || pathname.startsWith("/auth");
+  const onboardingPath = pathname === "/onboarding";
+  const onboardingApiPath = pathname.startsWith("/api/onboarding");
+  const safeSessionApi = pathname.startsWith("/api/auth/me") || pathname.startsWith("/api/auth/logout");
+
+  if (onboardingPath && !loggedIn) {
+    return NextResponse.redirect(new URL("/auth/login", request.url));
+  }
+
+  if (loggedIn && !onboardingCompleted && !publicPaths && !onboardingPath && !onboardingApiPath && !safeSessionApi) {
+    if (!isApi) {
+      return NextResponse.redirect(new URL("/onboarding", request.url));
+    }
+  }
+
+  if (loggedIn && onboardingPath && onboardingCompleted) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
   if (pathname.startsWith("/api/nexa")) {
@@ -56,10 +75,16 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (pathname.startsWith("/teacher") || pathname.startsWith("/api/teacher")) {
-    if (!loggedIn) return unauthorized();
-    if (session?.activeRole !== "TEACHER") return forbidden();
-    return NextResponse.next();
+  if (pathname.startsWith("/teacher")) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
+  if (pathname.startsWith("/api/teacher")) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
+
+  if (pathname.startsWith("/api/auth/switch-role") || pathname.startsWith("/api/auth/add-role")) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
   }
 
   if (pathname.startsWith("/api/students/teachers") && request.method === "GET") {
@@ -95,7 +120,6 @@ export function middleware(request: NextRequest) {
 
   if (pathname.startsWith("/student") || pathname.startsWith("/api/students") || pathname.startsWith("/api/exam")) {
     if (!loggedIn) return unauthorized();
-    if (session?.activeRole !== "STUDENT") return forbidden();
     if (pathname === "/student/top10" || pathname.startsWith("/student/top10/")) {
       const url = request.nextUrl.clone();
       url.pathname = pathname.replace("/student/top10", "/student/toprank");
@@ -116,7 +140,7 @@ export function middleware(request: NextRequest) {
   }
 
   if (pathname.startsWith("/auth") && loggedIn) {
-    const destination = session?.activeRole === "TEACHER" ? "/teacher/dashboard" : "/student/today";
+    const destination = onboardingCompleted ? "/dashboard" : "/onboarding";
     return NextResponse.redirect(new URL(destination, request.url));
   }
 
@@ -136,7 +160,9 @@ export const config = {
     "/api/rootcare/:path*",
     "/api/admin/:path*",
     "/api/nexa/:path*",
+    "/api/onboarding/:path*",
     "/dashboard/:path*",
+    "/onboarding/:path*",
     "/today/:path*",
     "/nexa/:path*",
     "/classes/:path*",

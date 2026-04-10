@@ -28,12 +28,7 @@ export default function LoginPage() {
         setError(data.error ?? "Login failed.");
         return;
       }
-      const role = data?.user?.activeRole;
-      if (role === "TEACHER") {
-        router.push("/teacher/dashboard");
-      } else {
-        router.push("/student/today");
-      }
+      router.push(data?.redirectTo ?? "/dashboard");
     } catch {
       setError("Network error. Please try again.");
     } finally {

@@ -1,7 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import type { SubscriptionPlan, SubscriptionStatus, UserRole } from "@prisma/client";
-import { RoleSwitcher } from "@/components/role-switcher";
+import type { SubscriptionPlan, SubscriptionStatus } from "@prisma/client";
 import { PLANS, subscriptionTierLabel } from "@/lib/pricing";
 import { TOPRANK_EXAM_TRACKS } from "@/lib/toprank-vision";
 
@@ -47,8 +46,6 @@ type Props = {
     streakDays: number;
     rankReadiness: number | null;
   };
-  roles: UserRole[];
-  activeRole: UserRole;
   paidActive: boolean;
 };
 
@@ -82,7 +79,7 @@ function Row({ label, value, action }: { label: string; value: ReactNode; action
   );
 }
 
-export function StudentProfessionalProfile({ user, vision, stats, roles, activeRole, paidActive }: Props) {
+export function StudentProfessionalProfile({ user, vision, stats, paidActive }: Props) {
   const tier = subscriptionTierLabel(user.plan);
   const planBlock = PLANS[user.plan];
 
@@ -252,13 +249,6 @@ export function StudentProfessionalProfile({ user, vision, stats, roles, activeR
         </div>
       </Section>
 
-      <section className="rounded-2xl border border-zinc-800/90 bg-zinc-900/35 p-5">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">Session</p>
-        <h2 className="mt-1.5 text-sm font-semibold text-white">Active role</h2>
-        <div className="mt-4">
-          <RoleSwitcher roles={roles} activeRole={activeRole} />
-        </div>
-      </section>
     </div>
   );
 }

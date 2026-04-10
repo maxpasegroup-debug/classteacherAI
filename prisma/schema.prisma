@@ -118,6 +118,28 @@ model User {
   performanceTopicStats PerformanceTopicStat[]
   performanceDailySnapshots PerformanceDailySnapshot[]
   performanceInsightRecords PerformanceInsightRecord[]
+  studentProfile StudentProfile?
+}
+
+model StudentProfile {
+  id                  String   @id @default(cuid())
+  userId               String   @unique
+  exam                 String
+  targetRank           Int
+  level                String
+  studyHours           Int
+  weakness             String
+  onboardingCompleted  Boolean  @default(false)
+  trainingIntensity    String
+  recommendedDailyQuestions Int
+  weakAreaFocus        String
+  difficultyStartLevel Int
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([exam])
 }
 
 /// Per-submitted-attempt analytics (source for progress charts and aggregates).

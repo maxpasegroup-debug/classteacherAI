@@ -25,6 +25,7 @@ export async function GET() {
       aiCredits: true,
       subscriptionStatus: true,
       planExpiry: true,
+      studentProfile: { select: { onboardingCompleted: true } },
     },
   });
 
@@ -32,14 +33,11 @@ export async function GET() {
     return NextResponse.json({ success: false, user: null }, { status: 401 });
   }
 
-  if (user.roles.length === 0) {
+  if (!user.roles.includes("STUDENT")) {
     return NextResponse.json({ success: false, user: null }, { status: 401 });
   }
 
-  let activeRole = session.activeRole;
-  if (!user.roles.includes(activeRole)) {
-    activeRole = toSessionPayload(user).activeRole;
-  }
+  const activeRole = "STUDENT";
 
   const rolesSynced =
     JSON.stringify([...user.roles].sort()) !== JSON.stringify([...session.roles].sort());
@@ -53,6 +51,8 @@ export async function GET() {
     await setSessionCookie(token);
   }
 
+  const onboardingCompleted = Boolean(user.studentProfile?.onboardingCompleted);
+
   return NextResponse.json({
     success: true,
     user: {
@@ -65,6 +65,8 @@ export async function GET() {
       aiCredits: user.aiCredits,
       subscriptionStatus: user.subscriptionStatus,
       planExpiry: user.planExpiry,
+      onboardingCompleted,
     },
+    redirectTo: onboardingCompleted ? "/dashboard" : "/onboarding",
   });
 }

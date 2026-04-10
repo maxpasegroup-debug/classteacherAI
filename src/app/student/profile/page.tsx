@@ -77,8 +77,6 @@ export default async function StudentProfilePage() {
       }}
       vision={vision}
       stats={stats}
-      roles={user.roles}
-      activeRole={session.activeRole}
       paidActive={paidActive}
     />
   );

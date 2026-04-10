@@ -12,6 +12,7 @@ export type SessionPayload = {
   plan?: SubscriptionPlan;
   planExpiry?: string | null;
   aiCredits?: number;
+  onboardingCompleted?: boolean;
 };
 
 /** Legacy tokens only had `role` (singular). */
@@ -42,6 +43,11 @@ export function normalizeSessionPayload(decoded: unknown): SessionPayload | null
     aiCredits = o.aiCredits;
   }
 
+  let onboardingCompleted: boolean | undefined;
+  if (typeof o.onboardingCompleted === "boolean") {
+    onboardingCompleted = o.onboardingCompleted;
+  }
+
   if (Array.isArray(o.roles) && typeof o.activeRole === "string") {
     const roles = o.roles.filter((r): r is "TEACHER" | "STUDENT" => r === "TEACHER" || r === "STUDENT");
     const activeRole = o.activeRole === "TEACHER" || o.activeRole === "STUDENT" ? o.activeRole : null;
@@ -54,6 +60,7 @@ export function normalizeSessionPayload(decoded: unknown): SessionPayload | null
         plan,
         planExpiry,
         aiCredits,
+        onboardingCompleted,
       };
     }
   }
@@ -68,6 +75,7 @@ export function normalizeSessionPayload(decoded: unknown): SessionPayload | null
       plan,
       planExpiry,
       aiCredits,
+      onboardingCompleted,
     };
   }
 
@@ -86,6 +94,7 @@ type SessionUser = {
   plan?: SubscriptionPlan;
   planExpiry?: Date | null;
   aiCredits?: number;
+  studentProfile?: { onboardingCompleted: boolean } | null;
 };
 
 /** Build JWT payload from DB user; optional `activeRole` must exist in `user.roles`. */
@@ -104,5 +113,8 @@ export function toSessionPayload(user: SessionUser, activeRole?: "TEACHER" | "ST
     payload.planExpiry = user.planExpiry ? user.planExpiry.toISOString() : null;
   }
   if (typeof user.aiCredits === "number") payload.aiCredits = user.aiCredits;
+  if (typeof user.studentProfile?.onboardingCompleted === "boolean") {
+    payload.onboardingCompleted = user.studentProfile.onboardingCompleted;
+  }
   return payload;
 }

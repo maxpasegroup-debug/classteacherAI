@@ -22,34 +22,36 @@ export async function POST(req: Request) {
     });
 
     if (!user) {
-      return Response.json(
-        { error: "Invalid email or password" },
-        { status: 400 }
-      );
+      return Response.json({ error: "Invalid email or password." }, { status: 400 });
     }
 
     const isValid = await bcrypt.compare(password, user.password);
 
     if (!isValid) {
-      return Response.json(
-        { error: "Invalid email or password" },
-        { status: 400 }
-      );
+      return Response.json({ error: "Invalid email or password." }, { status: 400 });
     }
 
-    if (user.roles.length === 0) {
-      return Response.json({ error: "Account has no roles assigned." }, { status: 403 });
+    if (!user.roles.includes("STUDENT")) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { roles: [...user.roles, "STUDENT"] },
+      });
     }
 
     await applyPlanExpiry(user.id);
-    const refreshed = await prisma.user.findUnique({ where: { id: user.id } });
+    const refreshed = await prisma.user.findUnique({
+      where: { id: user.id },
+      include: { studentProfile: { select: { onboardingCompleted: true } } },
+    });
     if (!refreshed) {
       return Response.json({ error: "Login failed" }, { status: 500 });
     }
 
-    const payload = toSessionPayload(refreshed);
+    const payload = toSessionPayload(refreshed, "STUDENT");
     const token = signSessionToken(payload);
     await setSessionCookie(token);
+
+    const onboardingCompleted = Boolean(refreshed.studentProfile?.onboardingCompleted);
 
     return Response.json({
       success: true,
@@ -57,9 +59,8 @@ export async function POST(req: Request) {
         id: user.id,
         name: user.name,
         email: user.email,
-        roles: user.roles,
-        activeRole: payload.activeRole,
       },
+      redirectTo: onboardingCompleted ? "/dashboard" : "/onboarding",
     });
   } catch (error) {
     console.error("LOGIN ERROR:", error);

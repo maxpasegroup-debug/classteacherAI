@@ -25,9 +25,17 @@ type PreviewProps = {
   previewOnly: boolean;
   userName: string;
   plan: SubscriptionPlan;
+  rankProfile?: {
+    targetRank: number;
+    level: string;
+    trainingIntensity: string;
+    weakAreaFocus: string;
+    recommendedDailyQuestions: number;
+    difficultyStartLevel: number;
+  } | null;
 };
 
-export function StudentTodayClient({ previewOnly, userName, plan }: PreviewProps) {
+export function StudentTodayClient({ previewOnly, userName, plan, rankProfile }: PreviewProps) {
   const [unlockOpen, setUnlockOpen] = useState(previewOnly);
   const [perfLoading, setPerfLoading] = useState(!previewOnly);
   const [perfError, setPerfError] = useState("");
@@ -200,6 +208,21 @@ export function StudentTodayClient({ previewOnly, userName, plan }: PreviewProps
           {new Date().toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
         </p>
       </header>
+
+      {rankProfile ? (
+        <section className="rounded-2xl border border-blue-500/25 bg-gradient-to-br from-blue-500/15 to-emerald-500/10 p-4">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-200/90">Your Rank Profile</p>
+          <div className="mt-2 grid grid-cols-2 gap-2 text-sm text-zinc-100">
+            <p>Target: Top {rankProfile.targetRank.toLocaleString("en-IN")}</p>
+            <p>Level: {rankProfile.level}</p>
+            <p>Strategy: {rankProfile.trainingIntensity}</p>
+            <p>Focus: {rankProfile.weakAreaFocus}</p>
+          </div>
+          <p className="mt-2 text-xs text-zinc-300">
+            Daily questions: {rankProfile.recommendedDailyQuestions} · Start level {rankProfile.difficultyStartLevel}
+          </p>
+        </section>
+      ) : null}
 
       {plan === "TOP10" && topVision !== false ? (
         topVision ? (

@@ -1,5 +1,4 @@
 import bcrypt from "bcryptjs";
-import type { UserRole } from "@prisma/client";
 import { setSessionCookie, signSessionToken } from "@/lib/auth";
 import { toSessionPayload } from "@/lib/session-payload";
 import { prisma } from "@/lib/prisma";
@@ -8,23 +7,16 @@ export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
-    const { name, email, password, role } = await req.json();
+    const { name, email, password } = await req.json();
 
-    if (!name?.trim() || !email || !password || !role) {
+    if (!name?.trim() || !email || !password) {
       return Response.json({ error: "Missing fields" }, { status: 400 });
-    }
-
-    if (role !== "TEACHER" && role !== "STUDENT") {
-      return Response.json({ error: "Invalid role" }, { status: 400 });
     }
 
     const existingUser = await prisma.user.findUnique({ where: { email } });
 
     if (existingUser) {
-      return Response.json(
-        { error: "Account already exists. Please login." },
-        { status: 400 }
-      );
+      return Response.json({ error: "An account with this email already exists." }, { status: 409 });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -34,7 +26,7 @@ export async function POST(req: Request) {
         name: name.trim(),
         email,
         password: hashedPassword,
-        roles: [role as UserRole],
+        roles: ["STUDENT"],
         plan: "BASIC",
         subscriptionStatus: "EXPIRED",
         planExpiry: null,
@@ -42,7 +34,7 @@ export async function POST(req: Request) {
       },
     });
 
-    const payload = toSessionPayload(user, role as UserRole);
+    const payload = toSessionPayload(user, "STUDENT");
     const token = signSessionToken(payload);
     await setSessionCookie(token);
 
@@ -52,9 +44,8 @@ export async function POST(req: Request) {
         id: user.id,
         name: user.name,
         email: user.email,
-        roles: user.roles,
-        activeRole: payload.activeRole,
       },
+      redirectTo: "/onboarding",
     });
   } catch (error) {
     console.error("SIGNUP ERROR:", error);

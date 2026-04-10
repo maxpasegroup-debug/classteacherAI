@@ -20,15 +20,43 @@ export default async function StudentTodayPage() {
       plan: true,
       subscriptionStatus: true,
       planExpiry: true,
+      studentProfile: {
+        select: {
+          onboardingCompleted: true,
+          targetRank: true,
+          level: true,
+          trainingIntensity: true,
+          weakAreaFocus: true,
+          recommendedDailyQuestions: true,
+          difficultyStartLevel: true,
+        },
+      },
     },
   });
 
   if (!user?.roles.includes("STUDENT")) {
     redirect("/auth/login");
   }
+  if (!user.studentProfile?.onboardingCompleted) {
+    redirect("/onboarding");
+  }
 
   const paidActive =
     user.subscriptionStatus === "ACTIVE" && Boolean(user.planExpiry && user.planExpiry > new Date());
 
-  return <StudentTodayClient previewOnly={!paidActive} userName={user.name} plan={user.plan} />;
+  return (
+    <StudentTodayClient
+      previewOnly={!paidActive}
+      userName={user.name}
+      plan={user.plan}
+      rankProfile={{
+        targetRank: user.studentProfile.targetRank,
+        level: user.studentProfile.level,
+        trainingIntensity: user.studentProfile.trainingIntensity,
+        weakAreaFocus: user.studentProfile.weakAreaFocus,
+        recommendedDailyQuestions: user.studentProfile.recommendedDailyQuestions,
+        difficultyStartLevel: user.studentProfile.difficultyStartLevel,
+      }}
+    />
+  );
 }
