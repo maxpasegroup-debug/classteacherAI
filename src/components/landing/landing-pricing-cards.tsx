@@ -47,7 +47,7 @@ export function LandingPricingCards() {
                 <h3 className={`text-lg font-semibold ${tier.highlight ? "text-white" : "text-zinc-900"}`}>{tier.name}</h3>
                 <p className={`mt-3 text-3xl font-semibold tracking-tight ${tier.highlight ? "text-white" : "text-zinc-950"}`}>
                   {tier.price}
-                  <span className={`text-sm font-normal ${tier.highlight ? "text-zinc-400" : "text-zinc-500"}>/mo</span>
+                  <span className={`text-sm font-normal ${tier.highlight ? "text-zinc-400" : "text-zinc-500"}`}>/mo</span>
                 </p>
                 <p className={`mt-3 flex-1 text-sm leading-relaxed ${tier.highlight ? "text-zinc-300" : "text-zinc-600"}`}>
                   {tier.blurb}
