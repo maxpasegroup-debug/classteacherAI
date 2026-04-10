@@ -28,6 +28,54 @@ const STUDENT_CAPABILITIES: { id: Capability; label: string; hint: string }[] = 
   { id: "NOTES_GENERATION", label: "Notes & summaries", hint: "Structured notes and flashcards" },
 ];
 
+function studentCapsForPlan(plan: string | null): { id: Capability; label: string; hint: string }[] {
+  if (plan === "TOP10") {
+    return [
+      {
+        id: "DOUBT_SOLVING",
+        label: "Doubt solving",
+        hint: "Trainer diagnosis — mistake analysis, weak topic, no casual chat",
+      },
+      {
+        id: "CONCEPT_TEACHING",
+        label: "Concept teaching",
+        hint: "Minimum viable theory → verify with a hard check",
+      },
+      { id: "EXAM_TIPS", label: "Exam & tests", hint: "Pacing, next timed mock, speed callouts" },
+      {
+        id: "NOTES_GENERATION",
+        label: "Practice & notes",
+        hint: "Battle notes + generated practice questions",
+      },
+    ];
+  }
+  if (plan === "PRO") {
+    return [
+      {
+        id: "DOUBT_SOLVING",
+        label: "Doubt solving",
+        hint: "Supportive coach — steps + bonus practice questions",
+      },
+      {
+        id: "CONCEPT_TEACHING",
+        label: "Concept teaching",
+        hint: "Clear explanations + mini-checks",
+      },
+      {
+        id: "EXAM_TIPS",
+        label: "Exam tips",
+        hint: "Strategy + suggested next tests",
+      },
+      {
+        id: "NOTES_GENERATION",
+        label: "Notes & summaries",
+        hint: "Structured notes + quick recall Qs",
+      },
+    ];
+  }
+  return STUDENT_CAPABILITIES;
+}
+
 const TEACHER_CAPABILITIES: { id: Capability; label: string; hint: string }[] = [
   { id: "LESSON_PLANNING", label: "Lesson planning", hint: "Objectives, flow, and assessment" },
   { id: "CONTENT_CREATION", label: "Content creation", hint: "Worksheets, items, rubrics, handouts" },
@@ -52,12 +100,8 @@ type SpeechWindow = Window & {
   SpeechRecognition?: new () => SpeechRecognitionInstance;
 };
 
-function capsForMode(mode: Mode) {
-  return mode === "TEACHER" ? TEACHER_CAPABILITIES : STUDENT_CAPABILITIES;
-}
-
-function normalizeCapability(mode: Mode, cap: Capability): Capability {
-  const allowed = capsForMode(mode).map((c) => c.id);
+function normalizeCapability(mode: Mode, cap: Capability, studentCaps: typeof STUDENT_CAPABILITIES): Capability {
+  const allowed = (mode === "TEACHER" ? TEACHER_CAPABILITIES : studentCaps).map((c) => c.id);
   if (allowed.includes(cap)) return cap;
   return mode === "TEACHER" ? "LESSON_PLANNING" : "DOUBT_SOLVING";
 }
@@ -97,6 +141,8 @@ export default function NexaPage() {
 
   const canUseTeacher = roles.includes("TEACHER");
   const canUseStudent = roles.includes("STUDENT");
+
+  const studentCapList = useMemo(() => studentCapsForPlan(plan), [plan]);
 
   const loadPreferences = useCallback(async () => {
     try {
@@ -168,8 +214,8 @@ export default function NexaPage() {
     if (roles.length === 0) return;
     appliedDefaultMode.current = true;
     setMode(activeRole);
-    setCapability(normalizeCapability(activeRole, "DOUBT_SOLVING"));
-  }, [roles, activeRole, hasAnyConversation]);
+    setCapability(normalizeCapability(activeRole, "DOUBT_SOLVING", studentCapList));
+  }, [roles, activeRole, hasAnyConversation, studentCapList]);
 
   useEffect(() => {
     void loadConversations();
@@ -211,7 +257,7 @@ export default function NexaPage() {
         setMessages(loaded[0].messages ?? []);
         const m = loaded[0].mode === "TEACHER" ? "TEACHER" : "STUDENT";
         setMode(m);
-        setCapability(normalizeCapability(m, loaded[0].capability as Capability));
+        setCapability(normalizeCapability(m, loaded[0].capability as Capability, studentCapList));
       }
     } catch {
       setError("Could not load chat history.");
@@ -258,7 +304,7 @@ export default function NexaPage() {
     setMessages(selected.messages);
     const m = selected.mode === "TEACHER" ? "TEACHER" : "STUDENT";
     setMode(m);
-    setCapability(normalizeCapability(m, selected.capability as Capability));
+    setCapability(normalizeCapability(m, selected.capability as Capability, studentCapList));
     setError("");
   }
 
@@ -298,11 +344,11 @@ export default function NexaPage() {
     const basicTeacher = plan === "BASIC" && mode === "TEACHER";
     const proOut = plan === "PRO" && credits !== null && credits <= 0;
     if (basicTeacher) {
-      setError("Nexa AI is not available for teachers on Basic. Upgrade to Pro or TOP10.");
+      setError("Nexa AI is not available for teachers on Starter. Upgrade to Pro or TopRank.");
       return;
     }
     if (basicStudent) {
-      setError("Nexa AI is not available on Basic. Upgrade to Pro or TOP10.");
+      setError("Nexa AI is not available on Starter. Upgrade to Pro or TopRank.");
       return;
     }
     if (proOut) {
@@ -374,24 +420,26 @@ export default function NexaPage() {
     }
   }
 
-  const capList = capsForMode(mode);
+  const capList = mode === "TEACHER" ? TEACHER_CAPABILITIES : studentCapList;
 
   return (
     <section className="space-y-3">
       <div className="rounded-2xl border border-slate-100 bg-white p-3 shadow-sm">
         <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
           <div>
-            <p className="text-sm font-semibold text-slate-900">Nexa AI</p>
+            <p className="text-sm font-semibold text-slate-900">Nexa</p>
             <p className="text-xs text-slate-500">
               {nexaPersona === "top10_trainer" && mode === "STUDENT"
-                ? "TOP10 AI Trainer — strict, goal-oriented; uses your exam memory for coaching."
-                : "Context-aware assistant — mode follows your role; save subject & level for better answers."}
+                ? "TopRank AI Trainer — strict coach; performance-aware; no casual chat."
+                : nexaPersona === "pro" && mode === "STUDENT"
+                  ? "Pro — supportive coach: concepts, practice questions, next-test ideas."
+                  : "Context-aware assistant — save subject & level for better answers."}
             </p>
             {nexaPersona === "top10_trainer" && mode === "STUDENT" && trainerMemory ? (
               <p className="mt-1 text-xs text-violet-900">
                 Rank readiness {trainerMemory.rankReadiness}/100
                 {trainerMemory.weakTopics.length > 0
-                  ? ` · You need improvement in: ${trainerMemory.weakTopics.slice(0, 4).join(", ")}`
+                  ? ` · Attack: ${trainerMemory.weakTopics.slice(0, 4).join(", ")}`
                   : ""}
                 {trainerMemory.examCount > 0 ? ` · Exams tracked: ${trainerMemory.examCount}` : ""}
               </p>
@@ -400,12 +448,17 @@ export default function NexaPage() {
           <div className="flex flex-wrap items-center gap-2">
             {plan === "TOP10" && mode === "STUDENT" ? (
               <span className="rounded-lg bg-violet-900 px-2.5 py-1 text-xs font-semibold text-violet-100">
-                TOP10 AI Trainer
+                TopRank trainer
+              </span>
+            ) : null}
+            {plan === "PRO" && mode === "STUDENT" ? (
+              <span className="rounded-lg bg-emerald-900 px-2.5 py-1 text-xs font-semibold text-emerald-100">
+                Pro coach
               </span>
             ) : null}
             {plan === "BASIC" && mode === "STUDENT" ? (
               <span className="rounded-lg bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900">
-                Basic: Nexa AI requires Pro or TOP10
+                Starter: upgrade for Nexa
               </span>
             ) : credits !== null ? (
               <span

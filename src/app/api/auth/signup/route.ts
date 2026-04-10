@@ -1,7 +1,6 @@
 import bcrypt from "bcryptjs";
 import type { UserRole } from "@prisma/client";
 import { setSessionCookie, signSessionToken } from "@/lib/auth";
-import { basicTrialEnd } from "@/lib/billing";
 import { toSessionPayload } from "@/lib/session-payload";
 import { prisma } from "@/lib/prisma";
 
@@ -37,8 +36,8 @@ export async function POST(req: Request) {
         password: hashedPassword,
         roles: [role as UserRole],
         plan: "BASIC",
-        subscriptionStatus: "ACTIVE",
-        planExpiry: basicTrialEnd(),
+        subscriptionStatus: "EXPIRED",
+        planExpiry: null,
         aiCredits: 0,
       },
     });

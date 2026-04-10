@@ -16,12 +16,21 @@ export type StartedQuestion = {
   options: string[];
 };
 
+export type ExamSessionMeta = {
+  timed: boolean;
+  autoEval: boolean;
+  topicFocus: string | null;
+  mixedDifficulty: boolean;
+  questionCount: number;
+};
+
 export type ExamAttemptPayload = {
   attemptId: string;
   exam: ExamItem;
   questions: StartedQuestion[];
   deadlineAt: string;
   durationSec: number;
+  sessionMeta?: ExamSessionMeta;
 };
 
 function formatTime(totalSec: number) {
@@ -62,9 +71,30 @@ export function ExamTakingView({
   const answeredCount = attempt.questions.reduce((acc, q) => (answers[q.id] ? acc + 1 : acc), 0);
   const activeQuestion = attempt.questions[activeQuestionIndex] ?? null;
 
+  const sessionBanner =
+    attempt.sessionMeta && !banner ? (
+      <div className="flex flex-wrap gap-2 rounded-lg border border-slate-200/90 bg-white px-3 py-2 text-[11px] text-slate-700">
+        {attempt.sessionMeta.timed ? (
+          <span className="rounded-full bg-emerald-100 px-2 py-0.5 font-medium text-emerald-900">Timed</span>
+        ) : null}
+        {attempt.sessionMeta.autoEval ? (
+          <span className="rounded-full bg-violet-100 px-2 py-0.5 font-medium text-violet-900">Auto evaluation</span>
+        ) : null}
+        {attempt.sessionMeta.mixedDifficulty ? (
+          <span className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-950">Mixed difficulty</span>
+        ) : null}
+        {attempt.sessionMeta.topicFocus ? (
+          <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-medium text-slate-800">
+            Topic: {attempt.sessionMeta.topicFocus}
+          </span>
+        ) : null}
+        <span className="ml-auto text-slate-500">{attempt.sessionMeta.questionCount} questions</span>
+      </div>
+    ) : null;
+
   return (
     <div className="space-y-3">
-      {banner}
+      {banner ?? sessionBanner}
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2">
         <div>
           <p className="text-sm font-semibold text-slate-900">{attempt.exam.title}</p>

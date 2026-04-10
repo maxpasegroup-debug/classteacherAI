@@ -32,7 +32,7 @@ export default function LoginPage() {
       if (role === "TEACHER") {
         router.push("/teacher/dashboard");
       } else {
-        router.push("/student/dashboard");
+        router.push("/student/today");
       }
     } catch {
       setError("Network error. Please try again.");

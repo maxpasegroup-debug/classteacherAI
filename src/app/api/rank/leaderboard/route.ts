@@ -6,6 +6,8 @@ import {
   dailyWindow,
   findUserRank,
   globalWindow,
+  RANK_COMPOSITE_PCT,
+  rankCompositeFormulaLine,
   topN,
   weeklyWindow,
   type RankedUser,
@@ -95,8 +97,35 @@ export async function GET() {
   const names = new Map(users.map((u) => [u.id, u.name]));
 
   return NextResponse.json({
-    label: "TOP10 Achievers",
-    formula: "Composite = 45% accuracy + 30% speed (vs peers) + 25% consistency",
+    label: "TopRank Achievers",
+    tagline: "Compete on accuracy, speed, and consistency — only the top 10 earn the spotlight each window.",
+    formula: `${rankCompositeFormulaLine()} (speed scored vs peers in the same window — faster = higher).`,
+    leaderboardSize: TOP_N,
+    criteria: [
+      {
+        id: "accuracy",
+        label: "Accuracy",
+        weightPct: RANK_COMPOSITE_PCT.accuracy,
+        hint: "Average % correct across attempts in the window.",
+      },
+      {
+        id: "speed",
+        label: "Speed",
+        weightPct: RANK_COMPOSITE_PCT.speed,
+        hint: "Seconds per question vs other ranked learners — beat the clock, not just the paper.",
+      },
+      {
+        id: "consistency",
+        label: "Consistency",
+        weightPct: RANK_COMPOSITE_PCT.consistency,
+        hint: "Stability of accuracy — fewer wild swings means a higher score.",
+      },
+    ],
+    windows: [
+      { id: "daily", label: "Daily", description: "UTC midnight through now" },
+      { id: "weekly", label: "Weekly", description: "Last 7 days" },
+      { id: "global", label: "Global", description: "Last 365 days" },
+    ],
     daily: scopePayload(rankedDaily, viewerId, names),
     weekly: scopePayload(rankedWeekly, viewerId, names),
     global: scopePayload(rankedGlobal, viewerId, names),

@@ -41,7 +41,7 @@ export function middleware(request: NextRequest) {
     if (isApi) {
       return NextResponse.json({ error: "Forbidden.", code: "FORBIDDEN" }, { status: 403 });
     }
-    const fallback = session?.activeRole === "TEACHER" ? "/teacher/dashboard" : "/student/dashboard";
+    const fallback = session?.activeRole === "TEACHER" ? "/teacher/dashboard" : "/student/today";
     return NextResponse.redirect(new URL(fallback, request.url));
   }
 
@@ -96,10 +96,10 @@ export function middleware(request: NextRequest) {
   if (pathname.startsWith("/student") || pathname.startsWith("/api/students") || pathname.startsWith("/api/exam")) {
     if (!loggedIn) return unauthorized();
     if (session?.activeRole !== "STUDENT") return forbidden();
-    if (pathname.startsWith("/student/top10")) {
-      if (session.plan === "BASIC" || session.plan === "PRO") {
-        return NextResponse.redirect(new URL("/pricing", request.url));
-      }
+    if (pathname === "/student/top10" || pathname.startsWith("/student/top10/")) {
+      const url = request.nextUrl.clone();
+      url.pathname = pathname.replace("/student/top10", "/student/toprank");
+      return NextResponse.redirect(url, 308);
     }
     return NextResponse.next();
   }
@@ -116,7 +116,7 @@ export function middleware(request: NextRequest) {
   }
 
   if (pathname.startsWith("/auth") && loggedIn) {
-    const destination = session?.activeRole === "TEACHER" ? "/teacher/dashboard" : "/student/dashboard";
+    const destination = session?.activeRole === "TEACHER" ? "/teacher/dashboard" : "/student/today";
     return NextResponse.redirect(new URL(destination, request.url));
   }
 

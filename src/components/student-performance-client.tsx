@@ -48,6 +48,7 @@ type AdvancedPayload = {
     consistencyScore: number | null;
     avgSecondsPerQuestion: number | null;
   }>;
+  rankReadinessSeries?: Array<{ at: string; rankReadiness: number }>;
   storedInsights: Array<{ message: string; kind: string; createdAt: string }>;
 };
 
@@ -82,10 +83,20 @@ function isBasicPayload(p: Payload): p is BasicPayload {
   return "tier" in p && p.tier === "basic";
 }
 
-function heatClass(masteryPct: number) {
-  if (masteryPct >= 78) return "border-emerald-200 bg-emerald-50 text-emerald-950";
-  if (masteryPct >= 60) return "border-amber-200 bg-amber-50 text-amber-950";
-  return "border-red-200 bg-red-50 text-red-950";
+/** HSL heat: red (weak) → green (strong). */
+function masteryHeatBackground(masteryPct: number) {
+  const p = Math.max(0, Math.min(100, masteryPct));
+  const hue = (p / 100) * 118;
+  const sat = 68 + (p / 100) * 8;
+  const light = 30 + (p / 100) * 24;
+  return `hsl(${hue} ${sat}% ${light}%)`;
+}
+
+function insightKindStyle(kind: string) {
+  if (kind === "improvement") return "from-emerald-500/20 to-teal-600/10 border-emerald-300/40";
+  if (kind === "focus") return "from-amber-500/20 to-orange-600/10 border-amber-300/40";
+  if (kind === "speed") return "from-sky-500/20 to-cyan-600/10 border-sky-300/40";
+  return "from-violet-500/15 to-indigo-600/10 border-violet-300/35";
 }
 
 function ProgressAccuracyChart({ series }: { series: AdvancedPayload["progressSeries"] }) {
@@ -124,6 +135,87 @@ function ProgressAccuracyChart({ series }: { series: AdvancedPayload["progressSe
       </svg>
       <p className="text-xs text-slate-500">
         Last {series.length} attempts · min {minA.toFixed(0)}% · max {maxA.toFixed(0)}%
+      </p>
+    </div>
+  );
+}
+
+function SpeedSparkline({ series }: { series: AdvancedPayload["progressSeries"] }) {
+  const pts = series.filter((s) => s.secondsPerQuestion != null && s.secondsPerQuestion > 0);
+  if (pts.length < 2) {
+    return <p className="text-sm text-slate-500">Speed trend appears after more timed attempts with pacing data.</p>;
+  }
+  const spqs = pts.map((s) => s.secondsPerQuestion!);
+  const minS = Math.min(...spqs);
+  const maxS = Math.max(...spqs);
+  const span = Math.max(maxS - minS, 1e-6);
+  const normY = (sec: number) => 6 + (1 - (sec - minS) / span) * 26;
+  const points = pts
+    .map((s, i) => {
+      const x = 4 + (i / (pts.length - 1)) * 92;
+      const y = normY(s.secondsPerQuestion!);
+      return `${x},${y}`;
+    })
+    .join(" ");
+
+  return (
+    <div className="space-y-1">
+      <svg viewBox="0 0 100 36" className="h-36 w-full" role="img" aria-label="Speed trend — seconds per question">
+        <line x1="4" y1="32" x2="96" y2="32" stroke="rgb(226 232 240)" strokeWidth="0.3" />
+        <polyline fill="none" points={points} stroke="rgb(14 165 233)" strokeWidth="0.55" strokeLinejoin="round" />
+        {pts.map((s, i) => (
+          <circle
+            key={`${s.at}-spq-${i}`}
+            cx={4 + (i / (pts.length - 1)) * 92}
+            cy={normY(s.secondsPerQuestion!)}
+            r="0.85"
+            fill="rgb(2 132 199)"
+          >
+            <title>{`${s.subject}: ${s.secondsPerQuestion!.toFixed(1)}s per Q`}</title>
+          </circle>
+        ))}
+      </svg>
+      <p className="text-xs text-slate-500">
+        Higher on chart = faster · {minS.toFixed(1)}s–{maxS.toFixed(1)}s per question across last {pts.length} points
+      </p>
+    </div>
+  );
+}
+
+function RankReadinessChart({ series }: { series: AdvancedPayload["rankReadinessSeries"] }) {
+  if (series.length < 2) {
+    return (
+      <p className="text-sm text-slate-500">
+        Rank readiness score builds from your exam history — keep submitting mocks to see the trend.
+      </p>
+    );
+  }
+  const vals = series.map((s) => s.rankReadiness);
+  const minR = Math.min(...vals);
+  const maxR = Math.max(...vals);
+  const span = Math.max(maxR - minR, 8);
+  const normY = (r: number) => 34 - ((r - minR) / span) * 28;
+  const points = series
+    .map((s, i) => {
+      const x = 4 + (i / (series.length - 1)) * 92;
+      const y = normY(s.rankReadiness);
+      return `${x},${y}`;
+    })
+    .join(" ");
+
+  return (
+    <div className="space-y-1">
+      <svg viewBox="0 0 100 36" className="h-36 w-full" role="img" aria-label="Rank readiness trend">
+        <line x1="4" y1="34" x2="96" y2="34" stroke="rgb(226 232 240)" strokeWidth="0.3" />
+        <polyline fill="none" points={points} stroke="rgb(139 92 246)" strokeWidth="0.5" strokeLinejoin="round" />
+        {series.map((s, i) => (
+          <circle key={`${s.at}-rr-${i}`} cx={4 + (i / (series.length - 1)) * 92} cy={normY(s.rankReadiness)} r="0.85" fill="rgb(124 58 237)">
+            <title>{`Readiness ${s.rankReadiness}/100`}</title>
+          </circle>
+        ))}
+      </svg>
+      <p className="text-xs text-slate-500">
+        Last {series.length} snapshots · range {minR}–{maxR} (0–100 scale)
       </p>
     </div>
   );
@@ -216,8 +308,18 @@ export function StudentPerformanceClient() {
     ...(advanced?.dailyImprovement.map((d) => d.avgAccuracy ?? 0) ?? [0]),
   );
 
+  const readinessSeries = advanced?.rankReadinessSeries ?? [];
+
   return (
     <div className="space-y-6">
+      <div className="rounded-2xl border border-indigo-100 bg-gradient-to-r from-indigo-50/90 via-white to-violet-50/80 px-4 py-3 shadow-sm">
+        <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">Performance intelligence</p>
+        <p className="mt-1 text-sm text-slate-700">
+          Every exam updates accuracy, speed, topic mastery, consistency, and rank readiness. The visuals below are built
+          from your real attempts — designed to make progress impossible to miss.
+        </p>
+      </div>
+
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <CardUI title="Overall accuracy" description="Across all submitted mocks.">
           <p className="text-2xl font-semibold text-slate-900">{summary.overallAccuracyPct.toFixed(1)}%</p>
@@ -247,8 +349,8 @@ export function StudentPerformanceClient() {
           <p className="text-2xl font-semibold text-slate-900">
             {summary.skillsAvgPct != null ? `${summary.skillsAvgPct.toFixed(0)}%` : "—"}
           </p>
-          <Link href="/student/dashboard" className="text-xs font-medium text-blue-600">
-            Update on dashboard →
+          <Link href="/student/today" className="text-xs font-medium text-blue-600">
+            Update on Today →
           </Link>
         </CardUI>
       </section>
@@ -285,41 +387,77 @@ export function StudentPerformanceClient() {
             </CardUI>
           </section>
 
-          <CardUI
-            title="Progress graph"
-            description="Accuracy % over recent attempts — stored per submit in your profile."
-          >
-            <ProgressAccuracyChart series={advanced.progressSeries} />
-          </CardUI>
+          {advanced.storedInsights.length > 0 ? (
+            <CardUI
+              title="AI insights"
+              description="Short signals from your trajectory — like a coach scanning your last papers."
+            >
+              <div className="flex gap-3 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {advanced.storedInsights.map((s) => (
+                  <div
+                    key={`${s.createdAt}-${s.message}`}
+                    className={`min-w-[220px] max-w-[280px] shrink-0 rounded-2xl border bg-gradient-to-br px-4 py-3 shadow-sm ${insightKindStyle(s.kind)}`}
+                  >
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-600">{s.kind}</p>
+                    <p className="mt-2 text-sm font-medium leading-snug text-slate-900">{s.message}</p>
+                  </div>
+                ))}
+              </div>
+              <Link href="/student/exams" className="mt-3 inline-block text-sm font-semibold text-indigo-600">
+                Lock in the next insight — train now →
+              </Link>
+            </CardUI>
+          ) : null}
+
+          <section className="grid gap-4 lg:grid-cols-3">
+            <CardUI
+              title="Accuracy curve"
+              description="% correct over recent attempts (each point is one submit)."
+            >
+              <ProgressAccuracyChart series={advanced.progressSeries} />
+            </CardUI>
+            <CardUI title="Speed curve" description="Seconds per question — up means you answered faster.">
+              <SpeedSparkline series={advanced.progressSeries} />
+            </CardUI>
+            <CardUI title="Rank readiness trail" description="0–100 estimate after each stored attempt.">
+              <RankReadinessChart series={readinessSeries} />
+            </CardUI>
+          </section>
 
           <CardUI
             title="Weakness heatmap"
-            description="Topic buckets (subject — level). Darker red = needs more reps."
+            description="Topic = subject + difficulty bucket. Color = mastery; tap a band and drill it on Exams."
           >
             {advanced.topicHeatmap.length === 0 ? (
               <EmptyState title="No topic data yet" detail="Complete exams with tagged questions to fill the heatmap." />
             ) : (
-              <div className="grid gap-2 sm:grid-cols-2">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
                 {[...advanced.topicHeatmap]
                   .sort((a, b) => a.masteryPct - b.masteryPct)
-                  .map((t) => (
-                    <div
-                      key={t.topicKey}
-                      className={`rounded-xl border px-3 py-2 text-sm ${heatClass(t.masteryPct)}`}
-                    >
-                      <p className="font-medium">{t.label}</p>
-                      <p className="text-xs opacity-90">
-                        {t.masteryPct.toFixed(0)}% mastery · {t.answered} Qs
-                      </p>
-                    </div>
-                  ))}
+                  .map((t) => {
+                    const darkText = t.masteryPct >= 55;
+                    return (
+                      <div
+                        key={t.topicKey}
+                        className="rounded-xl border border-black/10 px-3 py-3 text-sm shadow-sm transition hover:ring-2 hover:ring-indigo-300/40"
+                        style={{ backgroundColor: masteryHeatBackground(t.masteryPct) }}
+                      >
+                        <p className={`font-semibold leading-tight ${darkText ? "text-slate-900" : "text-white drop-shadow-sm"}`}>
+                          {t.label}
+                        </p>
+                        <p className={`mt-1 text-xs ${darkText ? "text-slate-800/90" : "text-white/90"}`}>
+                          {t.masteryPct.toFixed(0)}% · {t.answered} Qs
+                        </p>
+                      </div>
+                    );
+                  })}
               </div>
             )}
           </CardUI>
 
           <CardUI
             title="Daily improvement"
-            description="Stored daily aggregates — accuracy bar + consistency (when 2+ attempts that day)."
+            description="Each day: average accuracy (tall indigo), same-day consistency (teal), and pacing (when stored)."
           >
             {advanced.dailyImprovement.length === 0 ? (
               <EmptyState title="No daily rows" detail="Your next attempts will populate this chart." />
@@ -360,35 +498,6 @@ export function StudentPerformanceClient() {
               </div>
             )}
           </CardUI>
-
-          {advanced.storedInsights.length > 0 ? (
-            <CardUI
-              title="Tracked insights"
-              description="Generated from your stored performance history (e.g. subject lift, focus areas)."
-            >
-              <ul className="space-y-3">
-                {advanced.storedInsights.map((s) => (
-                  <li
-                    key={`${s.createdAt}-${s.message}`}
-                    className="rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-2 text-sm text-slate-800"
-                  >
-                    <span
-                      className={`mr-2 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                        s.kind === "improvement"
-                          ? "bg-emerald-100 text-emerald-900"
-                          : s.kind === "focus"
-                            ? "bg-amber-100 text-amber-900"
-                            : "bg-blue-100 text-blue-900"
-                      }`}
-                    >
-                      {s.kind}
-                    </span>
-                    {s.message}
-                  </li>
-                ))}
-              </ul>
-            </CardUI>
-          ) : null}
         </>
       ) : null}
 
@@ -499,7 +608,10 @@ export function StudentPerformanceClient() {
         </Link>
       </CardUI>
 
-      <CardUI title="AI insights" description="Personalized tips from your numbers — no extra credits used.">
+      <CardUI
+        title="Coach notes"
+        description="Rule-based guidance from streaks, peers, and weekly deltas — plus the quick signals above."
+      >
         <ul className="list-inside list-disc space-y-2 text-sm text-slate-700">
           {insights.map((line, i) => (
             <li key={i}>{line}</li>

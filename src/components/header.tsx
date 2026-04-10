@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { HeaderDashboardLink } from "@/components/header-dashboard-link";
 
 type HeaderProps = {
   title: string;
@@ -15,12 +16,7 @@ export function Header({ title, subtitle }: HeaderProps) {
           {subtitle ? <p className="text-xs text-slate-500">{subtitle}</p> : null}
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2">
-          <Link
-            href="/dashboard"
-            className="rounded-full border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 sm:px-2.5 sm:text-xs"
-          >
-            Dashboard
-          </Link>
+          <HeaderDashboardLink />
           <Link
             href="/notifications"
             className="relative rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700"

@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import { setSessionCookie, signSessionToken } from "@/lib/auth";
+import { applyPlanExpiry } from "@/lib/billing";
 import { toSessionPayload } from "@/lib/session-payload";
 import { prisma } from "@/lib/prisma";
 
@@ -40,7 +41,13 @@ export async function POST(req: Request) {
       return Response.json({ error: "Account has no roles assigned." }, { status: 403 });
     }
 
-    const payload = toSessionPayload(user);
+    await applyPlanExpiry(user.id);
+    const refreshed = await prisma.user.findUnique({ where: { id: user.id } });
+    if (!refreshed) {
+      return Response.json({ error: "Login failed" }, { status: 500 });
+    }
+
+    const payload = toSessionPayload(refreshed);
     const token = signSessionToken(payload);
     await setSessionCookie(token);
 

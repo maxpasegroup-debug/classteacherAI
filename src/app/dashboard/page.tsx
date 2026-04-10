@@ -7,6 +7,6 @@ export default async function DashboardPage() {
     redirect("/auth/login");
   }
 
-  const destination = session.activeRole === "TEACHER" ? "/teacher/dashboard" : "/student/dashboard";
+  const destination = session.activeRole === "TEACHER" ? "/teacher/dashboard" : "/student/today";
   redirect(destination);
 }

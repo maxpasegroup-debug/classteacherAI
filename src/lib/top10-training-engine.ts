@@ -2,6 +2,8 @@
 
 export const PASS_THRESHOLD_PCT = 65;
 export const SURPRISE_REAL_PROBABILITY = 0.2;
+/** Slightly higher when learner has locked a TopRank vision (exam-hall simulations). */
+export const SURPRISE_REAL_PROBABILITY_TOPRANK = 0.28;
 export const TOP10_QUESTION_CAP = 20;
 export const TOP10_QUESTION_MIN = 10;
 
@@ -24,8 +26,9 @@ export function adaptiveDifficulty(accuracyPct: number, prev: number): number {
   return Math.max(1, prev - 2);
 }
 
-export function shouldTriggerSurpriseReal(): boolean {
-  return Math.random() < SURPRISE_REAL_PROBABILITY;
+export function shouldTriggerSurpriseReal(withVisionBoard = false): boolean {
+  const p = withVisionBoard ? SURPRISE_REAL_PROBABILITY_TOPRANK : SURPRISE_REAL_PROBABILITY;
+  return Math.random() < p;
 }
 
 export function questionCountForDifficulty(tier: number) {

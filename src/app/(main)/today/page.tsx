@@ -11,6 +11,10 @@ export default async function TodayPage() {
 
   const teacher = session.activeRole === "TEACHER";
 
+  if (session.activeRole === "STUDENT") {
+    redirect("/student/today");
+  }
+
   return (
     <section className="space-y-4">
       <CardUI
@@ -52,7 +56,7 @@ export default async function TodayPage() {
           ) : (
             <>
               <Link
-                href="/student/dashboard"
+                href="/student/today"
                 className="rounded-xl bg-slate-900 px-3 py-2.5 text-center text-sm font-medium text-white"
               >
                 Student dashboard

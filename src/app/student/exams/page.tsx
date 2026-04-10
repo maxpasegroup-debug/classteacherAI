@@ -16,7 +16,7 @@ export default async function StudentExamsPage() {
   ]);
 
   return (
-    <main className="min-h-screen px-4 py-8 bg-elite-mesh">
+    <div className="min-h-0 rounded-2xl border border-zinc-800/40 bg-elite-mesh px-3 py-6 sm:px-4">
       <section className="mx-auto max-w-4xl space-y-6">
         <header className="space-y-1">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Training</p>
@@ -25,6 +25,6 @@ export default async function StudentExamsPage() {
         </header>
         <StudentExamsClient exams={exams} plan={user?.plan ?? "BASIC"} />
       </section>
-    </main>
+    </div>
   );
 }

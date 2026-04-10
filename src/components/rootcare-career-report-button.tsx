@@ -38,7 +38,7 @@ export function RootcareCareerReportButton() {
         disabled={loading}
         className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-2 text-sm font-semibold text-teal-900 hover:bg-teal-100 disabled:opacity-60"
       >
-        {loading ? "Generating…" : "Generate career mapping report"}
+        {loading ? "Generating…" : "Generate career suggestions"}
       </button>
       {error ? <InlineNotice tone="error">{error}</InlineNotice> : null}
       {ok ? <InlineNotice tone="success">{ok}</InlineNotice> : null}

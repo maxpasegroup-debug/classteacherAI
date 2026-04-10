@@ -145,6 +145,7 @@ export async function GET() {
           consistencyScore: number | null;
           avgSecondsPerQuestion: number | null;
         }>,
+        rankReadinessSeries: [] as Array<{ at: string; rankReadiness: number }>,
         storedInsights: [] as Array<{ message: string; kind: string; createdAt: string }>,
       },
     });
@@ -384,6 +385,14 @@ export async function GET() {
     16,
   );
 
+  const rankReadinessSeries = perfMetrics
+    .filter((m) => m.rankReadinessSnapshot != null)
+    .slice(-28)
+    .map((m) => ({
+      at: m.createdAt.toISOString(),
+      rankReadiness: m.rankReadinessSnapshot as number,
+    }));
+
   return NextResponse.json({
     summary: {
       overallAccuracyPct,
@@ -417,6 +426,7 @@ export async function GET() {
       progressSeries,
       topicHeatmap,
       dailyImprovement,
+      rankReadinessSeries,
       storedInsights,
     },
   });

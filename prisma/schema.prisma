@@ -112,6 +112,7 @@ model User {
   helpRequestsAsStudent StudentHelpRequest[] @relation("StudentHelpRequests")
   helpRequestsAsTeacher StudentHelpRequest[] @relation("MatchedTeacherHelp")
   top10TrainingState Top10TrainingState?
+  topRankVisionBoard TopRankVisionBoard?
   nexaStudentMemory NexaStudentMemory?
   performanceAttemptMetrics PerformanceAttemptMetric[]
   performanceTopicStats PerformanceTopicStat[]
@@ -371,6 +372,27 @@ model ExamAttempt {
   allowedSeconds Int?
 
   exam Exam @relation(fields: [examId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// TopRank (TOP10) — dream rank entry, vision board, environment checklist.
+model TopRankVisionBoard {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  /// e.g. NEET, JEE_MAIN, JEE_ADV, CUET, STATE_PMT, OTHER
+  examTrack        String
+  targetRank       Int
+  targetDate       DateTime
+  /// Auto-derived from rank band + exam (display on vision board).
+  dreamCollege     String
+  /// Short goal line, e.g. "AIR 1500 · NEET · Jun 2026"
+  goalCardLine     String
+  envStudyTable       Boolean @default(false)
+  envDistractionFree  Boolean @default(false)
+  envDailySchedule    Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 

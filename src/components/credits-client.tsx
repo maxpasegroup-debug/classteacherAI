@@ -65,7 +65,7 @@ export function CreditsClient({
 
   async function buyCredits(kind: PackKind) {
     if (!canTopUp) {
-      setError("Subscribe to Pro or TOP10 with an active period before buying credit top-ups.");
+      setError("Subscribe to Pro or TopRank with an active period before buying credit top-ups.");
       return;
     }
     setError("");
@@ -131,12 +131,12 @@ export function CreditsClient({
           </p>
           <p className="mt-1 text-xs text-slate-500">
             AI credits are used for Nexa AI, live sessions, and other premium actions. Top-ups require an active Pro or
-            TOP10 subscription.
+            TopRank subscription.
           </p>
           {!canTopUp ? (
             <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
               {plan === "BASIC"
-                ? "You are on the free Basic plan. Upgrade first to subscribe, then you can top up credits."
+                ? "Starter does not include top-up packs. Upgrade to Pro or TopRank with an active period to buy credits."
                 : "Your subscription is not active or has expired. Renew on the pricing page, then return here to top up."}{" "}
               <Link href="/pricing" className="font-medium text-blue-700 underline">
                 View pricing

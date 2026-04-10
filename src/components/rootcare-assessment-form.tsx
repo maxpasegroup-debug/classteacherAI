@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { InlineNotice } from "@/components/ui-states";
 
@@ -12,6 +13,7 @@ const QUESTIONS: { id: string; label: string }[] = [
 ];
 
 export function RootcareAssessmentForm() {
+  const router = useRouter();
   const [answers, setAnswers] = useState<Record<string, number>>(() => {
     const o: Record<string, number> = {};
     for (const q of QUESTIONS) o[q.id] = 3;
@@ -38,6 +40,7 @@ export function RootcareAssessmentForm() {
         return;
       }
       setOk(`Saved. Your snapshot score: ${typeof data.score === "number" ? data.score.toFixed(0) : "—"}.`);
+      router.refresh();
     } catch {
       setError("Network error.");
     } finally {

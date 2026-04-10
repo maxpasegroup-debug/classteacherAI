@@ -36,7 +36,7 @@ export function RoleSwitcher({ roles, activeRole }: Props) {
         return;
       }
       router.refresh();
-      router.push(newRole === "TEACHER" ? "/teacher/dashboard" : "/student/dashboard");
+      router.push(newRole === "TEACHER" ? "/teacher/dashboard" : "/student/today");
     } finally {
       setLoading(false);
     }

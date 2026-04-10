@@ -1,6 +1,8 @@
+import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getCurrentSession } from "@/lib/auth";
 import { BASIC_EXAM_STARTS_PER_DAY } from "@/lib/billing";
+import { pickMixedDifficultyQuestions } from "@/lib/exam-question-selection";
 import { prisma } from "@/lib/prisma";
 import { requireStudentFeature } from "@/lib/student-access";
 import {
@@ -37,6 +39,10 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as {
     examId?: string;
     trainingMode?: TrainingModeApi;
+    /** Optional keyword — questions whose text contains it (topic drill). */
+    topicFocus?: string | null;
+    /** Sample across easy / medium / hard levels. */
+    mixedDifficulty?: boolean;
   } | null;
 
   const trainingMode: TrainingModeApi = body?.trainingMode ?? "standard";
@@ -85,7 +91,13 @@ export async function POST(request: Request) {
     const exam = await prisma.exam.findUnique({ where: { id: examId } });
     if (!exam) return NextResponse.json({ error: "Exam not found." }, { status: 404 });
 
-    const surpriseReal = shouldTriggerSurpriseReal();
+    const hasVision = Boolean(
+      await prisma.topRankVisionBoard.findUnique({
+        where: { userId: session.userId },
+        select: { id: true },
+      }),
+    );
+    const surpriseReal = shouldTriggerSurpriseReal(hasVision);
 
     const tier = state.difficulty;
     const targetCount = questionCountForDifficulty(tier);
@@ -147,6 +159,13 @@ export async function POST(request: Request) {
         difficulty: tier,
         circuitCount: state.circuitCount,
       },
+      sessionMeta: {
+        timed: true,
+        autoEval: true,
+        topicFocus: null,
+        mixedDifficulty: true,
+        questionCount: questions.length,
+      },
     });
   }
 
@@ -176,18 +195,49 @@ export async function POST(request: Request) {
   const exam = await prisma.exam.findUnique({ where: { id: body.examId } });
   if (!exam) return NextResponse.json({ error: "Exam not found." }, { status: 404 });
 
-  const order: "asc" | "desc" = trainingMode === "practice" ? "asc" : "desc";
+  const topicRaw = typeof body?.topicFocus === "string" ? body.topicFocus.trim() : "";
+  const topicFocus = topicRaw.length > 0 ? topicRaw : null;
+  const mixedDifficulty = Boolean(body?.mixedDifficulty);
 
-  let questions = await prisma.questionBank.findMany({
-    where: { subject: exam.subject },
-    take: 20,
+  const order: "asc" | "desc" = trainingMode === "practice" ? "asc" : "desc";
+  const targetCount = trainingMode === "practice" ? 15 : 18;
+
+  const focusedWhere: Prisma.QuestionBankWhereInput = { subject: exam.subject };
+  if (topicFocus) {
+    focusedWhere.OR = [
+      { question: { contains: topicFocus, mode: "insensitive" } },
+      { explanation: { contains: topicFocus, mode: "insensitive" } },
+    ];
+  }
+
+  let pool = await prisma.questionBank.findMany({
+    where: focusedWhere,
+    take: 120,
     orderBy: { createdAt: order },
   });
 
-  if (trainingMode === "practice") {
-    questions = questions.slice(0, Math.min(15, questions.length));
-  } else if (trainingMode === "advanced") {
-    questions = questions.slice(0, Math.min(18, questions.length));
+  if (topicFocus && pool.length < 5) {
+    pool = await prisma.questionBank.findMany({
+      where: { subject: exam.subject },
+      take: 120,
+      orderBy: { createdAt: order },
+    });
+  }
+
+  let questions =
+    mixedDifficulty && pool.length > 0
+      ? pickMixedDifficultyQuestions(pool, Math.min(targetCount, pool.length))
+      : pool.slice(0, Math.min(targetCount, pool.length));
+
+  if (questions.length === 0) {
+    const fallback = await prisma.questionBank.findMany({
+      where: { subject: exam.subject },
+      take: Math.min(targetCount, 40),
+      orderBy: { createdAt: order },
+    });
+    questions = mixedDifficulty
+      ? pickMixedDifficultyQuestions(fallback, Math.min(targetCount, fallback.length))
+      : fallback;
   }
 
   const modeUpper =
@@ -213,5 +263,12 @@ export async function POST(request: Request) {
     durationSec,
     questions: questions.map((q) => ({ id: q.id, question: q.question, options: q.options })),
     trainingMeta: modeUpper ? { trainingMode, difficulty: gate.user.plan === "TOP10" ? 3 : 2 } : undefined,
+    sessionMeta: {
+      timed: true,
+      autoEval: true,
+      topicFocus,
+      mixedDifficulty,
+      questionCount: questions.length,
+    },
   });
 }

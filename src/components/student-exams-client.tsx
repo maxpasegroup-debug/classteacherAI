@@ -7,6 +7,7 @@ import { CardUI } from "@/components/card-ui";
 import { ExamTakingView, type ExamAttemptPayload } from "@/components/exam-taking-view";
 import { RootCareFunnelNudge } from "@/components/rootcare-funnel-nudge";
 import { Top10TrainingCamp } from "@/components/top10-training-camp";
+import { TopRankAchieversBoard } from "@/components/toprank-achievers-board";
 import { EmptyState, ErrorState, InlineNotice, LoadingState } from "@/components/ui-states";
 
 type ExamItem = {
@@ -60,37 +61,6 @@ type AttemptHistory = {
   exam: ExamItem;
 };
 
-type AchieverRow = {
-  rank: number;
-  name: string;
-  compositeScore: number;
-  avgAccuracy: number;
-  avgSecondsPerQuestion: number;
-  speedScore: number;
-  consistency: number;
-};
-
-type RankScopePayload = {
-  top10: AchieverRow[];
-  yourRank: number | null;
-  yourScore: number | null;
-  totalRanked: number;
-  breakdown: {
-    avgAccuracy: number;
-    avgSecondsPerQuestion: number;
-    speedScore: number;
-    consistency: number;
-  } | null;
-};
-
-type RankBoardResponse = {
-  label: string;
-  formula: string;
-  daily: RankScopePayload;
-  weekly: RankScopePayload;
-  global: RankScopePayload;
-};
-
 type TrainingModeChoice = "select" | "practice" | "advanced" | "top10";
 
 type Props = {
@@ -114,12 +84,12 @@ export function StudentExamsClient({ exams, plan }: Props) {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState("");
 
-  const [rankBoard, setRankBoard] = useState<RankBoardResponse | null>(null);
-  const [rankScope, setRankScope] = useState<"daily" | "weekly" | "global">("daily");
-  const [rankLoading, setRankLoading] = useState(false);
-  const [rankError, setRankError] = useState("");
   const [feedback, setFeedback] = useState("");
   const [rootcareRefresh, setRootcareRefresh] = useState(0);
+  /** Topic-wise drill: keyword matched in question / explanation text. */
+  const [topicFocus, setTopicFocus] = useState("");
+  /** Pull easy / medium / hard into one session. */
+  const [mixedDifficulty, setMixedDifficulty] = useState(true);
 
   const selectedExam = useMemo(
     () => exams.find((exam) => exam.id === selectedExamId) ?? null,
@@ -146,35 +116,9 @@ export function StudentExamsClient({ exams, plan }: Props) {
     }
   }, []);
 
-  const loadRankBoard = useCallback(async () => {
-    setRankLoading(true);
-    setRankError("");
-    try {
-      const res = await fetch("/api/rank/leaderboard");
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setRankError(data.error ?? "Could not load rank board.");
-        setRankBoard(null);
-        return;
-      }
-      setRankBoard(data as RankBoardResponse);
-    } catch {
-      setRankError("Network error while loading ranks.");
-      setRankBoard(null);
-    } finally {
-      setRankLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
     void loadAttempts();
   }, [loadAttempts]);
-
-  useEffect(() => {
-    if (trainingMode === "practice" || trainingMode === "advanced") {
-      void loadRankBoard();
-    }
-  }, [trainingMode, loadRankBoard]);
 
   useEffect(() => {
     if (!currentAttempt) return;
@@ -216,6 +160,8 @@ export function StudentExamsClient({ exams, plan }: Props) {
         body: JSON.stringify({
           examId,
           trainingMode: trainingMode === "practice" ? "practice" : "advanced",
+          topicFocus: topicFocus.trim() || null,
+          mixedDifficulty,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -256,7 +202,6 @@ export function StudentExamsClient({ exams, plan }: Props) {
       }
       setResult(data as SubmitResult);
       await loadAttempts();
-      await loadRankBoard();
       setRootcareRefresh((k) => k + 1);
       setCurrentAttempt(null);
       if (!autoSubmit) setSecondsLeft(0);
@@ -292,7 +237,7 @@ export function StudentExamsClient({ exams, plan }: Props) {
   const trainingModeIsLoop = trainingMode === "practice" || trainingMode === "advanced";
 
   return (
-    <div className={`space-y-6 ${trainingModeIsLoop ? "pb-28" : ""}`}>
+    <div className={`space-y-6 ${trainingModeIsLoop ? "pb-[max(8.5rem,calc(env(safe-area-inset-bottom)+7.5rem))]" : ""}`}>
       <RootCareFunnelNudge variant="exams" refreshKey={rootcareRefresh} />
 
       <CardUI
@@ -374,6 +319,11 @@ export function StudentExamsClient({ exams, plan }: Props) {
 
       {showTop10Camp ? (
         <div className="space-y-4">
+          <p className="text-center text-xs text-slate-600">
+            <Link href="/student/toprank" className="font-medium text-violet-700 underline hover:text-violet-900">
+              TopRank hub — vision board, dream rank, environment checklist
+            </Link>
+          </p>
           <Top10TrainingCamp />
         </div>
       ) : null}
@@ -411,6 +361,35 @@ export function StudentExamsClient({ exams, plan }: Props) {
                   Start exam
                 </button>
               </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs text-slate-500">Topic drill (optional)</label>
+                  <input
+                    type="text"
+                    value={topicFocus}
+                    onChange={(e) => setTopicFocus(e.target.value)}
+                    placeholder="e.g. quadratic, organic, motion…"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  />
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    Prioritizes items containing this phrase. Expands to full paper if too few matches.
+                  </p>
+                </div>
+                <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-slate-50/80 p-3">
+                  <input
+                    type="checkbox"
+                    checked={mixedDifficulty}
+                    onChange={(e) => setMixedDifficulty(e.target.checked)}
+                    className="mt-1 rounded border-slate-300"
+                  />
+                  <span>
+                    <span className="block text-sm font-medium text-slate-900">Mixed difficulty</span>
+                    <span className="block text-xs text-slate-600">
+                      Blend easier and harder items in one timed round.
+                    </span>
+                  </span>
+                </label>
+              </div>
               {selectedExam ? (
                 <p className="text-xs text-slate-500">
                   {selectedExam.subject} - {selectedExam.type} - strict duration {selectedExam.durationMin} minutes.
@@ -434,7 +413,10 @@ export function StudentExamsClient({ exams, plan }: Props) {
 
       {result && trainingMode !== "top10" ? (
         <>
-          <CardUI title="Result" description="Instant evaluation from your latest attempt.">
+          <CardUI
+            title="Results"
+            description="Auto evaluation — score, accuracy, weak topics, and your next paper."
+          >
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="rounded-lg border border-slate-100 p-3">
                 <p className="text-xs text-slate-500">Score</p>
@@ -451,21 +433,16 @@ export function StudentExamsClient({ exams, plan }: Props) {
                 <p className="text-xl font-semibold text-slate-900">{formatTime(result.timeSpentSec)}</p>
               </div>
               <div className="rounded-lg border border-slate-100 p-3">
-                <p className="text-xs text-slate-500">Timer status</p>
+                <p className="text-xs text-slate-500">Timer</p>
                 <p className={`text-xl font-semibold ${result.isTimeExceeded ? "text-red-600" : "text-emerald-700"}`}>
                   {result.isTimeExceeded ? "Exceeded" : "Within limit"}
                 </p>
               </div>
             </div>
-          </CardUI>
-          {loop ? (
-            <CardUI
-              title="Keep training — no dead ends"
-              description="Weak areas from this round, then retry or jump to the next recommended paper."
-            >
-              <div className="space-y-4">
+            {loop ? (
+              <div className="mt-4 space-y-4 border-t border-slate-100 pt-4">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Weak areas</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Weak topics</p>
                   <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-slate-800">
                     {loop.weakAreas.map((w, i) => (
                       <li key={`${i}-${w}`}>{w}</li>
@@ -479,33 +456,17 @@ export function StudentExamsClient({ exams, plan }: Props) {
                     {loop.nextRecommendedExam.subject} · {loop.nextRecommendedExam.durationMin} min ·{" "}
                     {loop.nextRecommendedExam.reason}
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => void startExam(loop.nextRecommendedExam.id)}
-                    className="mt-3 w-full rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm"
-                  >
-                    Start recommended test
-                  </button>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void startExam(loop.retryExamId)}
-                    className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800"
-                  >
-                    Retry this exam
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void startExam(loop.nextRecommendedExam.id)}
-                    className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
-                  >
-                    Continue training
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => void startExam(loop.retryExamId)}
+                  className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800"
+                >
+                  Retry this exam
+                </button>
               </div>
-            </CardUI>
-          ) : null}
+            ) : null}
+          </CardUI>
           {result.trainerDebrief ? (
             <CardUI
               title="TOP10 AI Trainer"
@@ -576,106 +537,30 @@ export function StudentExamsClient({ exams, plan }: Props) {
       </CardUI>
 
       {trainingMode === "practice" || trainingMode === "advanced" ? (
-        <div className="rounded-2xl border-2 border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50 p-1 shadow-md">
-          <CardUI
-            title="TOP10 Achievers"
-            description="Top 10 learners by composite rank — accuracy, speed (vs peers), and consistency. Daily, weekly, and global windows."
-          >
-            <p className="mb-3 text-xs text-slate-600">
-              {rankBoard?.formula ?? "45% accuracy + 30% speed + 25% consistency"}
-            </p>
-            <div className="mb-4 flex flex-wrap gap-2">
-              {(["daily", "weekly", "global"] as const).map((scope) => (
-                <button
-                  key={scope}
-                  type="button"
-                  onClick={() => setRankScope(scope)}
-                  className={`rounded-full px-3 py-1.5 text-xs font-semibold capitalize ${
-                    rankScope === scope
-                      ? "bg-slate-900 text-white"
-                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                  }`}
-                >
-                  {scope === "global" ? "Global (year)" : scope}
-                </button>
-              ))}
-            </div>
-            {rankLoading ? <LoadingState label="Loading ranks…" /> : null}
-            {rankError ? <ErrorState message={rankError} /> : null}
-            {!rankLoading && !rankError && rankBoard ? (
-              (() => {
-                const scopeData = rankBoard[rankScope];
-                return (
-                  <div className="space-y-4">
-                    {scopeData.yourRank != null ? (
-                      <div className="rounded-xl border border-violet-200 bg-violet-50/80 px-3 py-2 text-sm text-violet-950">
-                        <p className="font-semibold">
-                          Your rank: #{scopeData.yourRank} of {scopeData.totalRanked}
-                          {scopeData.yourScore != null ? (
-                            <span className="font-normal text-violet-800"> · score {scopeData.yourScore}</span>
-                          ) : null}
-                        </p>
-                        {scopeData.breakdown ? (
-                          <p className="mt-1 text-xs text-violet-900/90">
-                            Accuracy {scopeData.breakdown.avgAccuracy}% · {scopeData.breakdown.avgSecondsPerQuestion}s/Q ·
-                            speed pts {scopeData.breakdown.speedScore} · consistency {scopeData.breakdown.consistency}
-                          </p>
-                        ) : null}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-slate-600">
-                        Submit attempts in this window to earn a rank ({scopeData.totalRanked} learners ranked).
-                      </p>
-                    )}
-                    {scopeData.top10.length === 0 ? (
-                      <EmptyState title="No ranks yet" detail="Complete a timed exam to enter the board." />
-                    ) : (
-                      <ul className="space-y-2">
-                        {scopeData.top10.map((row, idx) => (
-                          <li
-                            key={`${rankScope}-${row.rank}-${row.name}`}
-                            className={`rounded-xl border p-3 text-sm ${
-                              idx === 0
-                                ? "border-amber-300 bg-gradient-to-r from-amber-100/90 to-orange-50"
-                                : "border-slate-100 bg-white"
-                            }`}
-                          >
-                            <p className="font-semibold text-slate-900">
-                              #{row.rank} {row.name}
-                              {idx === 0 ? (
-                                <span className="ml-2 text-xs font-normal text-amber-800">Leading achiever</span>
-                              ) : null}
-                            </p>
-                            <p className="text-xs text-slate-600">
-                              Score {row.compositeScore} · {row.avgAccuracy}% acc · {row.avgSecondsPerQuestion}s/Q ·
-                              consistency {row.consistency}
-                            </p>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                );
-              })()
-            ) : null}
-          </CardUI>
-        </div>
+        <TopRankAchieversBoard refreshKey={rootcareRefresh} variant="exams" />
       ) : null}
 
       {trainingModeIsLoop ? (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-8px_30px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
+        <div
+          className="fixed inset-x-0 z-[45] border-t border-zinc-800 bg-zinc-950/95 px-4 py-3 shadow-[0_-8px_30px_rgba(0,0,0,0.4)] backdrop-blur-md sm:px-6"
+          style={{
+            bottom: "max(4.35rem, calc(env(safe-area-inset-bottom) + 3.85rem))",
+          }}
+        >
           <div className="mx-auto flex max-w-3xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs text-slate-600">
+            <p className="text-xs text-zinc-400">
               {continueTrainingTarget
-                ? `Suggested next: ${continueTrainingTarget.title}`
-                : "Pick a paper and start — the loop keeps going after every result."}
+                ? `Next up: ${continueTrainingTarget.title}`
+                : result
+                  ? "Use Continue training for the next round — no idle state."
+                  : "Start a timed round — after every result you can continue in one tap."}
             </p>
             <button
               type="button"
               onClick={() => void startExam(continueTrainingTarget?.id)}
-              className="shrink-0 rounded-xl bg-gradient-to-r from-violet-600 to-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md"
+              className="shrink-0 rounded-xl bg-gradient-to-r from-violet-500 to-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md"
             >
-              Continue training
+              👉 Continue training
             </button>
           </div>
         </div>

@@ -7,7 +7,10 @@ const SNOOZE_KEY = "rootcare_funnel_snooze_until";
 
 type FunnelPayload = {
   headline: string;
+  phase?: "assessment" | "report" | "complete";
   examSubmittedCount: number;
+  assessmentCount?: number;
+  reportCount?: number;
   suggestNudge: boolean;
   free: { basicAssessment: boolean; careerMapping: boolean };
   advanced: { counseling: boolean; courseSuggestions: boolean };
@@ -67,20 +70,23 @@ export function RootCareFunnelNudge({ variant = "dashboard", refreshKey = 0 }: P
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-wide text-teal-800">RootCare</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-teal-800">RootCare · after your practice</p>
           <p className={`font-semibold text-slate-900 ${compact ? "text-base" : "text-lg"}`}>{data.headline}</p>
           <p className="text-sm text-slate-600">
-            You have built exam rhythm ({data.examSubmittedCount} completed attempts). Explore career fit — free basics
-            for everyone; Pro and TOP10 unlock counseling and course paths.
+            {data.phase === "report"
+              ? "You already saved a career assessment — generate your mapping report for tailored tracks, then talk to a counselor when you are ready."
+              : `You have exam momentum (${data.examSubmittedCount} completed attempts). The RootCare path keeps you inside one ecosystem: assess → map careers → get guidance when you want it.`}
           </p>
           <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
             <li>
-              <span className="font-medium text-teal-900">Free:</span> basic assessment · career mapping
+              <span className="font-medium text-teal-900">Assessment:</span> quick interest snapshot
             </li>
             <li>
-              <span className="font-medium text-slate-700">Advanced:</span>{" "}
-              {data.advanced.counseling ? "counseling · " : ""}
-              {data.advanced.courseSuggestions ? "course suggestions" : "upgrade for more"}
+              <span className="font-medium text-teal-900">Suggestions:</span> career tracks from your answers
+            </li>
+            <li>
+              <span className="font-medium text-slate-700">Counseling:</span>{" "}
+              {data.advanced.counseling ? "included with your plan" : "Pro / TOP10 + Help desk"}
             </li>
           </ul>
         </div>
@@ -89,7 +95,7 @@ export function RootCareFunnelNudge({ variant = "dashboard", refreshKey = 0 }: P
             href="/rootcare"
             className="inline-flex items-center justify-center rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-800"
           >
-            Explore RootCare
+            {data.phase === "report" ? "Open RootCare — generate report" : "Start RootCare path"}
           </Link>
           <button
             type="button"

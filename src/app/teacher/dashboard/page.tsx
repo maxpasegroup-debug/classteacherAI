@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { subscriptionTierLabel } from "@/lib/pricing";
 import { RoleSwitcher } from "@/components/role-switcher";
 import { TeacherDashboardClient } from "@/components/teacher-dashboard-client";
 
@@ -27,7 +28,9 @@ export default async function TeacherDashboardPage() {
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Teacher Dashboard</h1>
           <p className="mt-2 text-sm text-slate-600">Welcome back, {user.name}.</p>
           <p className="mt-1 text-sm text-slate-600">{user.email}</p>
-          <p className="mt-1 text-xs text-slate-500">Plan: {user.plan} · AI credits: {user.aiCredits}</p>
+          <p className="mt-1 text-xs text-slate-500">
+            Plan: {subscriptionTierLabel(user.plan)} · AI credits: {user.aiCredits}
+          </p>
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <RoleSwitcher roles={user.roles} activeRole={session.activeRole} />
             <Link href="/pricing" className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white">

@@ -208,8 +208,8 @@ async function buildInsightMessages(userId: string): Promise<InsightMsg[]> {
   const metrics = await prisma.performanceAttemptMetric.findMany({
     where: { userId },
     orderBy: { createdAt: "desc" },
-    take: 40,
-    select: { subject: true, accuracyPct: true, createdAt: true },
+    take: 48,
+    select: { subject: true, accuracyPct: true, secondsPerQuestion: true, createdAt: true },
   });
 
   if (metrics.length === 0) return out;
@@ -222,18 +222,19 @@ async function buildInsightMessages(userId: string): Promise<InsightMsg[]> {
   }
 
   for (const [sub, rows] of bySubject) {
-    if (rows.length < 6) continue;
+    if (rows.length < 4) continue;
     const sorted = [...rows].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
     const n = sorted.length;
-    const prev3 = sorted.slice(Math.max(0, n - 6), Math.max(0, n - 3));
-    const last3 = sorted.slice(Math.max(0, n - 3));
-    if (prev3.length < 3 || last3.length < 3) continue;
-    const prevAvg = prev3.reduce((s, x) => s + x.accuracyPct, 0) / 3;
-    const lastAvg = last3.reduce((s, x) => s + x.accuracyPct, 0) / 3;
+    const mid = Math.floor(n / 2);
+    const firstHalf = sorted.slice(0, mid);
+    const secondHalf = sorted.slice(mid);
+    if (firstHalf.length < 2 || secondHalf.length < 2) continue;
+    const prevAvg = firstHalf.reduce((s, x) => s + x.accuracyPct, 0) / firstHalf.length;
+    const lastAvg = secondHalf.reduce((s, x) => s + x.accuracyPct, 0) / secondHalf.length;
     const delta = lastAvg - prevAvg;
-    if (delta >= 3) {
+    if (delta >= 2) {
       out.push({
-        message: `You improved about ${delta.toFixed(0)}% in ${sub} (last 3 attempts vs the 3 before).`,
+        message: `You improved in ${sub}.`,
         kind: "improvement",
         relatedSubject: sub,
       });
@@ -254,11 +255,31 @@ async function buildInsightMessages(userId: string): Promise<InsightMsg[]> {
 
   if (weakest && weakest.mastery < 72) {
     out.push({
-      message: `Focus on ${weakest.label} — mastery is about ${weakest.mastery.toFixed(0)}% across your attempts.`,
+      message: `Focus on ${weakest.subject}.`,
       kind: "focus",
       relatedSubject: weakest.subject,
       relatedTopic: weakest.label,
     });
+  }
+
+  const chronological = [...metrics].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const withSpq = chronological.filter((m) => m.secondsPerQuestion > 0);
+  if (withSpq.length >= 6) {
+    const n = withSpq.length;
+    const prev3 = withSpq.slice(Math.max(0, n - 6), n - 3);
+    const last3 = withSpq.slice(n - 3);
+    if (prev3.length === 3 && last3.length === 3) {
+      const pa = prev3.reduce((s, x) => s + x.secondsPerQuestion, 0) / 3;
+      const la = last3.reduce((s, x) => s + x.secondsPerQuestion, 0) / 3;
+      const accPrev = prev3.reduce((s, x) => s + x.accuracyPct, 0) / 3;
+      const accLast = last3.reduce((s, x) => s + x.accuracyPct, 0) / 3;
+      if (la < pa * 0.92 && accLast + 3 >= accPrev) {
+        out.push({
+          message: "You're getting faster without sacrificing accuracy — keep that rhythm.",
+          kind: "speed",
+        });
+      }
+    }
   }
 
   const last7 = metrics.filter((m) => {
@@ -277,12 +298,38 @@ async function buildInsightMessages(userId: string): Promise<InsightMsg[]> {
       out.push({
         message:
           d > 0
-            ? `Daily trend: your recent attempts average ${d.toFixed(1)} points higher than the week before.`
-            : `Recent accuracy dipped about ${Math.abs(d).toFixed(1)} points vs the prior week — tighten one weak topic at a time.`,
+            ? `This week is stronger than last — about +${d.toFixed(0)} points on average.`
+            : `Accuracy dipped ~${Math.abs(d).toFixed(0)} points vs last week — one focused topic drill usually reverses this.`,
         kind: "milestone",
       });
     }
   }
 
-  return out.slice(0, 6);
+  const subjectSums = new Map<string, { sum: number; n: number }>();
+  for (const m of metrics) {
+    const cur = subjectSums.get(m.subject) ?? { sum: 0, n: 0 };
+    cur.sum += m.accuracyPct;
+    cur.n += 1;
+    subjectSums.set(m.subject, cur);
+  }
+  let weakestSub: string | null = null;
+  let weakestAcc = 101;
+  for (const [sub, v] of subjectSums) {
+    if (v.n < 2) continue;
+    const avg = v.sum / v.n;
+    if (avg < weakestAcc) {
+      weakestAcc = avg;
+      weakestSub = sub;
+    }
+  }
+  if (weakestSub != null && weakestAcc < 68 && !out.some((o) => o.kind === "focus" && o.relatedSubject === weakestSub)) {
+    out.push({
+      message: `Focus on ${weakestSub}.`,
+      kind: "focus",
+      relatedSubject: weakestSub,
+    });
+  }
+
+  const seen = new Set<string>();
+  return out.filter((o) => (seen.has(o.message) ? false : (seen.add(o.message), true))).slice(0, 6);
 }

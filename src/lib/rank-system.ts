@@ -66,12 +66,25 @@ export type RankedUser = {
   consistency: number;
 };
 
-const W_ACC = 0.45;
-const W_SPEED = 0.3;
-const W_CONS = 0.25;
+/** Weights for TopRank Achievers composite (must sum to 1). */
+export const RANK_COMPOSITE = {
+  accuracy: 0.45,
+  speed: 0.3,
+  consistency: 0.25,
+} as const;
+
+export const RANK_COMPOSITE_PCT = {
+  accuracy: Math.round(RANK_COMPOSITE.accuracy * 100),
+  speed: Math.round(RANK_COMPOSITE.speed * 100),
+  consistency: Math.round(RANK_COMPOSITE.consistency * 100),
+} as const;
+
+export function rankCompositeFormulaLine(): string {
+  return `Composite = ${RANK_COMPOSITE_PCT.accuracy}% accuracy + ${RANK_COMPOSITE_PCT.speed}% speed + ${RANK_COMPOSITE_PCT.consistency}% consistency`;
+}
 
 /**
- * Composite score: accuracy (45%) + speed vs cohort (30%) + consistency (25%).
+ * Composite score: accuracy + speed vs cohort + consistency (see RANK_COMPOSITE).
  * Higher is better. Speed uses inverted min–max normalization (faster = higher).
  */
 export function buildRankedList(attempts: AttemptRow[], win: { start: Date; end: Date }): RankedUser[] {
@@ -105,7 +118,10 @@ export function buildRankedList(attempts: AttemptRow[], win: { start: Date; end:
 
   for (const r of rows) {
     r.speedScore = 100 * (1 - (r.avgSecondsPerQuestion - minSpq) / range);
-    r.compositeScore = W_ACC * r.avgAccuracy + W_SPEED * r.speedScore + W_CONS * r.consistency;
+    r.compositeScore =
+      RANK_COMPOSITE.accuracy * r.avgAccuracy +
+      RANK_COMPOSITE.speed * r.speedScore +
+      RANK_COMPOSITE.consistency * r.consistency;
   }
 
   rows.sort((a, b) => b.compositeScore - a.compositeScore);

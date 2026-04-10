@@ -33,18 +33,24 @@ export async function POST(request: Request) {
   const avg = records.length ? records.reduce((a, b) => a + b.score, 0) / records.length : 0;
   const weakAreas = [...new Set(records.flatMap((item) => item.weakAreas))].slice(0, 8);
 
+  const summary =
+    records.length === 0
+      ? "No performance snapshots on file yet. Log exam or practice results to populate trends."
+      : `Based on ${records.length} recent snapshot(s): average ${avg.toFixed(1)}%. ${
+          weakAreas.length > 0
+            ? `Flagged focus areas: ${weakAreas.join(", ")}. Recommend targeted drills before the next assessment.`
+            : "No weak-area flags in the latest snapshots."
+        }`;
+
   const pdf = await PDFDocument.create();
   const page = pdf.addPage([595, 842]);
   const font = await pdf.embedFont(StandardFonts.Helvetica);
-  page.drawText("ClassteacherAI - AI Report Card", { x: 50, y: 790, size: 20, font, color: rgb(0.1, 0.1, 0.2) });
+  page.drawText("ClassteacherAI - Report card", { x: 50, y: 790, size: 20, font, color: rgb(0.1, 0.1, 0.2) });
   page.drawText(`Student: ${student.name}`, { x: 50, y: 755, size: 12, font });
   page.drawText(`Email: ${student.email}`, { x: 50, y: 738, size: 12, font });
-  page.drawText(`Average Score: ${avg.toFixed(2)}%`, { x: 50, y: 710, size: 12, font });
-  page.drawText(`Weak Areas: ${weakAreas.join(", ") || "None identified"}`, { x: 50, y: 690, size: 12, font });
-  page.drawText(
-    "AI Summary: Student shows consistent potential. Focus on weak areas with targeted practice and weekly mock tests.",
-    { x: 50, y: 660, size: 11, font, maxWidth: 500, lineHeight: 14 },
-  );
+  page.drawText(`Average score: ${avg.toFixed(2)}%`, { x: 50, y: 710, size: 12, font });
+  page.drawText(`Weak areas: ${weakAreas.join(", ") || "None identified"}`, { x: 50, y: 690, size: 12, font });
+  page.drawText(summary, { x: 50, y: 660, size: 11, font, maxWidth: 500, lineHeight: 14 });
 
   const bytes = await pdf.save();
   return new Response(Buffer.from(bytes), {

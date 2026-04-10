@@ -10,7 +10,7 @@ export default async function AdminPage() {
   const session = await getCurrentSession();
   if (!session) redirect("/auth/login");
   if (!isAdminEmail(session.email)) {
-    redirect(session.activeRole === "TEACHER" ? "/teacher/dashboard" : "/student/dashboard");
+    redirect(session.activeRole === "TEACHER" ? "/teacher/dashboard" : "/student/today");
   }
 
   return (

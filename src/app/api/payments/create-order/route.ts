@@ -38,7 +38,7 @@ export async function POST(request: Request) {
     if (user.plan === "BASIC") {
       return NextResponse.json(
         {
-          error: "Upgrade to Pro or TOP10 before buying AI credit top-ups.",
+          error: "Upgrade to Pro or TopRank before buying AI credit top-ups.",
           code: "PLAN",
         },
         { status: 403 },

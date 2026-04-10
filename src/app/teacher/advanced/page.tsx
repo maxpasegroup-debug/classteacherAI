@@ -7,8 +7,8 @@ export default async function TeacherAdvancedPage() {
   const session = await getCurrentSession();
   if (!session || session.activeRole !== "TEACHER") redirect("/auth/login");
 
-  const [performance, earnings, reviews, sessions] = await Promise.all([
-    prisma.studentPerformance.findMany({ orderBy: { createdAt: "desc" }, take: 20 }),
+  const [rosterCount, earnings, reviews, sessions] = await Promise.all([
+    prisma.teacherStudent.count({ where: { teacherId: session.userId } }),
     prisma.earningLedger.aggregate({ where: { userId: session.userId }, _sum: { amount: true } }),
     prisma.teacherReview.findMany({ where: { teacherId: session.userId }, take: 10, orderBy: { createdAt: "desc" } }),
     prisma.sessionBooking.findMany({ where: { teacherId: session.userId }, take: 10, orderBy: { scheduledAt: "desc" } }),
@@ -19,7 +19,7 @@ export default async function TeacherAdvancedPage() {
       <section className="mx-auto max-w-5xl space-y-4">
         <h1 className="text-2xl font-semibold text-slate-900">Teacher Advanced</h1>
         <div className="grid gap-3 sm:grid-cols-3">
-          <article className="rounded-xl bg-white p-4 shadow-sm">Students tracked: {performance.length}</article>
+          <article className="rounded-xl bg-white p-4 shadow-sm">Roster students: {rosterCount}</article>
           <article className="rounded-xl bg-white p-4 shadow-sm">Total earnings: ₹{earnings._sum.amount ?? 0}</article>
           <article className="rounded-xl bg-white p-4 shadow-sm">Reviews: {reviews.length}</article>
         </div>

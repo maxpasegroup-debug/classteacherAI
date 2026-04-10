@@ -1,38 +1,51 @@
 /**
  * Single source of truth for public pricing (INR) and included AI credits.
+ * DB enum stays BASIC / PRO / TOP10; user-facing names are Starter / Pro / TopRank.
  * Access rules: `applyPlanExpiry` + `assertCanUseAi` / Nexa branching in `@/lib/billing`.
  */
+
+import type { SubscriptionPlan } from "@prisma/client";
 
 export const PLANS = {
   BASIC: {
     key: "BASIC" as const,
-    name: "Basic",
-    label: "Basic",
-    /** After 30-day trial, monthly Basic access (exam + basic reports). */
-    priceInr: 199,
+    name: "Starter",
+    label: "Starter",
+    /** Paid entry tier: limited attempts, basic analytics, platform UI. */
+    priceInr: 499,
     creditsIncluded: 0,
     aiEnabled: false,
-    summary: "30-day trial, then ₹199/mo. Limited exam practice and basic reports. No Nexa AI — upgrade for AI.",
+    summary:
+      "Limited exam attempts, basic analytics, and full platform UI. No Nexa coaching — upgrade for AI-driven prep.",
   },
   PRO: {
     key: "PRO" as const,
     name: "Pro",
     label: "Pro",
-    priceInr: 499,
-    creditsIncluded: 1000,
+    priceInr: 1999,
+    creditsIncluded: 2000,
     aiEnabled: true,
-    summary: "Controlled AI via credits. Exams, study help, Nexa, and performance analytics.",
+    summary:
+      "Full exam system, adaptive tests, limited Nexa AI coaching (credits), performance analytics, and study help.",
   },
   TOP10: {
     key: "TOP10" as const,
-    name: "TOP10",
-    label: "TOP10",
+    name: "TopRank",
+    label: "TopRank",
     priceInr: 4999,
     creditsIncluded: 500_000,
     aiEnabled: true,
-    summary: "Full AI pool, TOP10 training, advanced analytics, and daily challenges.",
+    summary:
+      "Full Nexa AI trainer (hardcore mode), continuous training loop, daily missions, weakness targeting, exam simulations, and rank readiness.",
   },
 } as const;
+
+/** User-visible plan name for a DB tier. */
+export function subscriptionTierLabel(plan: SubscriptionPlan): string {
+  if (plan === "BASIC") return PLANS.BASIC.name;
+  if (plan === "PRO") return PLANS.PRO.name;
+  return PLANS.TOP10.name;
+}
 
 /** One-time AI credit top-ups. Requires active PRO or TOP10 — see create-order API. */
 export const CREDIT_TOP_UP_PACKS = {
@@ -51,7 +64,7 @@ export const CREDIT_TOP_UP_PACKS = {
 } as const;
 
 export const AI_ACCESS_RULES = [
-  "BASIC: no Nexa AI for teachers or students; use Pro or TOP10 for AI.",
-  "PRO: ACTIVE plan period, AI credits > 0, daily request cap, daily token cap.",
-  "TOP10: ACTIVE plan period; high token allowance with monitoring; no per-request credit deduction.",
+  "Starter: no Nexa AI for teachers or students; use Pro or TopRank for coaching.",
+  "Pro: active billing period, AI credits > 0, daily request cap, daily token cap.",
+  "TopRank: active billing period; high token allowance with monitoring; no per-request credit deduction.",
 ] as const;

@@ -215,7 +215,7 @@ export function Top10TrainingCamp() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data.error ?? "Could not start TOP10 round.");
+        setError(data.error ?? "Could not start TopRank round.");
         return;
       }
       const started = data as ExamAttemptPayload & { trainingMeta?: TrainingMeta };
@@ -343,7 +343,7 @@ export function Top10TrainingCamp() {
       <div className="sticky top-0 z-40 border-b border-white/10 bg-zinc-950/90 px-4 py-3 backdrop-blur-md sm:px-6">
         <div className="mx-auto max-w-3xl space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-200/90">
-            <span>TOP10 Elite</span>
+            <span>TopRank Elite</span>
             <span className="tabular-nums text-zinc-400">{Math.round(progressPct)}% loop</span>
           </div>
           <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-800/90">
@@ -373,7 +373,8 @@ export function Top10TrainingCamp() {
         <header className="space-y-2 border-b border-white/5 pb-5">
           <h2 className="font-training-display text-2xl text-white sm:text-3xl">Rank training camp</h2>
           <p className="max-w-2xl text-sm leading-relaxed text-zinc-400">
-            Minimal UI, maximum signal. Loop: exam → debrief → analysis → drill → re-test.
+            Core loop: exam → result → analysis → practice → re-test. Surprise simulations fire at random — exam-hall pace.
+            Weak topics drive difficulty; fail the bar → mandatory retry.
           </p>
         </header>
 
@@ -382,11 +383,13 @@ export function Top10TrainingCamp() {
         {phase === "lobby" ? (
           <DarkPanel
             title="Enter the loop"
-            description="Starts your next circuit — adaptive difficulty and pacing."
+            description="Adaptive difficulty from your last round — no dead ends."
           >
             <div className="rounded-xl border border-dashed border-white/15 bg-white/[0.03] px-4 py-6 text-center">
-              <p className="text-sm font-medium text-zinc-200">Ready</p>
-              <p className="mt-1 text-xs text-zinc-500">No idle screen — your next action is one tap away.</p>
+              <p className="text-sm font-medium text-zinc-200">Continue training</p>
+              <p className="mt-1 text-xs text-zinc-500">
+                One tap starts the next exam block. Finish → analysis → drill → re-test automatically.
+              </p>
             </div>
             <button
               type="button"
@@ -542,8 +545,8 @@ export function Top10TrainingCamp() {
         ) : null}
 
         <p className="text-center text-xs text-zinc-600">
-          <Link href="/student/dashboard" className="font-medium text-zinc-400 underline decoration-zinc-600 hover:text-zinc-300">
-            Exit to dashboard
+          <Link href="/student/today" className="font-medium text-zinc-400 underline decoration-zinc-600 hover:text-zinc-300">
+            Exit to Today hub
           </Link>
         </p>
       </div>

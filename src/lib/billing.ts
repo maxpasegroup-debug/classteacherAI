@@ -107,7 +107,7 @@ export async function assertCanUseAi(userId: string): Promise<AiGateResult> {
   }
 
   if (user.plan === "BASIC") {
-    return { ok: false, error: "Upgrade plan for full AI access.", code: "PLAN" };
+    return { ok: false, error: "Upgrade to Pro or TopRank for full Nexa AI access.", code: "PLAN" };
   }
 
   if (user.plan === "TOP10") {

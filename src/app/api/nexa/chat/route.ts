@@ -21,6 +21,7 @@ import {
   applyPlanExpiry,
 } from "@/lib/billing";
 import { logAi } from "@/lib/logger";
+import { buildProSupportMemoryLine } from "@/lib/nexa-pro-context";
 import { buildNexaSystemPrompt, studentPersonaFromPlan } from "@/lib/nexa-personas";
 import type { SessionPayload } from "@/lib/session-payload";
 
@@ -120,7 +121,7 @@ export async function POST(request: Request) {
   if (mode === "STUDENT" && plan === "BASIC") {
     logAi("nexa_blocked", { userId: session.userId, reason: "BASIC_STUDENT" });
     return NextResponse.json(
-      { error: "Nexa AI is not available on Basic. Upgrade to Pro or TOP10.", code: "PLAN" },
+      { error: "Nexa AI is not available on Starter. Upgrade to Pro or TopRank.", code: "PLAN" },
       { status: 403 },
     );
   }
@@ -140,7 +141,7 @@ export async function POST(request: Request) {
     if (plan === "BASIC") {
       logAi("nexa_blocked", { userId: session.userId, reason: "BASIC_TEACHER" });
       return NextResponse.json(
-        { error: "Nexa AI is not available on Basic for teachers. Upgrade to Pro or TOP10.", code: "PLAN" },
+        { error: "Nexa AI is not available on Starter for teachers. Upgrade to Pro or TopRank.", code: "PLAN" },
         { status: 403 },
       );
     }
@@ -200,9 +201,12 @@ export async function POST(request: Request) {
   const trainerMemoryLine =
     mode === "STUDENT" && plan === "TOP10"
       ? trainerMem
-        ? `Trainer performance file (use these facts; quote rank readiness as ${trainerMem.rankReadiness}/100 when discussing readiness): Weak topics to attack: ${trainerMem.weakTopics.length ? trainerMem.weakTopics.slice(0, 8).join("; ") : "none logged yet"}. Exams logged: ${trainerMem.examCount}. Last exam accuracy: ${trainerMem.lastAccuracyPct != null ? `${trainerMem.lastAccuracyPct.toFixed(1)}%` : "n/a"}.`
-        : "Performance file empty — no exam memory yet; instruct them to complete timed attempts so your guidance can target gaps."
+        ? `TopRank performance file (mandatory; quote rank readiness as ${trainerMem.rankReadiness}/100): Weak topics to attack: ${trainerMem.weakTopics.length ? trainerMem.weakTopics.slice(0, 8).join("; ") : "none logged yet"}. Exams logged: ${trainerMem.examCount}. Last exam accuracy: ${trainerMem.lastAccuracyPct != null ? `${trainerMem.lastAccuracyPct.toFixed(1)}%` : "n/a"}. If accuracy is low or weak topics are many, use strict language (e.g. not ready / retry / speed issue).`
+        : "Performance file empty — no exam memory yet. Tell them to complete a timed attempt now; no casual coaching until there is data."
       : undefined;
+
+  const proSupportMemoryLine =
+    mode === "STUDENT" && plan === "PRO" ? await buildProSupportMemoryLine(session.userId) : undefined;
 
   const subjectForPrompt =
     mode === "STUDENT"
@@ -278,6 +282,7 @@ export async function POST(request: Request) {
     chatTopicsLine,
     studentPersona: studentPersonaFromPlan(plan),
     trainerMemoryLine,
+    proSupportMemoryLine,
   });
 
   const messagesForOpenAi: OpenAI.Chat.ChatCompletionMessageParam[] = [

@@ -14,8 +14,7 @@ export type StudentFeature =
 export function planAllowsFeature(plan: SubscriptionPlan, feature: StudentFeature): boolean {
   if (plan === "TOP10") return true;
   if (plan === "PRO") {
-    if (feature === "top10_training" || feature === "performance_basic") return false;
-    return true;
+    return feature !== "top10_training";
   }
   if (plan === "BASIC") {
     return feature === "exam_start" || feature === "performance_basic";
