@@ -183,7 +183,7 @@ function SpeedSparkline({ series }: { series: AdvancedPayload["progressSeries"] 
 }
 
 function RankReadinessChart({ series }: { series: AdvancedPayload["rankReadinessSeries"] }) {
-  if (series.length < 2) {
+  if (!series || series.length < 2) {
     return (
       <p className="text-sm text-slate-500">
         Rank readiness score builds from your exam history — keep submitting mocks to see the trend.
