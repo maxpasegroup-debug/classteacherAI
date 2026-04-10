@@ -11,8 +11,9 @@
     "start": "next start -p $PORT",
     "lint": "eslint",
     "postinstall": "prisma generate",
+    "db:compat": "prisma db execute --schema prisma/schema.prisma --file prisma/compat/ensure-user-roles.sql",
     "migrate:deploy": "prisma migrate deploy",
-    "start:railway": "next start -p $PORT"
+    "start:railway": "npm run db:compat && next start -p $PORT"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
