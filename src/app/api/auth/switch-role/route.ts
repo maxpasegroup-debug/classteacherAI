@@ -26,8 +26,8 @@ export async function POST(request: Request) {
       email: true,
       roles: true,
       plan: true,
-      planExpiry: true,
-      aiCredits: true,
+      subscriptionExpiry: true,
+      credits: true,
     },
   });
 

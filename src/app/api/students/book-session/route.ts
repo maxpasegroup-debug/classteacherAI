@@ -21,15 +21,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing fields." }, { status: 400 });
   }
 
-  const user = await prisma.user.findUnique({ where: { id: session.userId }, select: { aiCredits: true } });
-  if (!user || user.aiCredits < CREDIT_COSTS.LIVE_SESSION) {
+  const user = await prisma.user.findUnique({ where: { id: session.userId }, select: { credits: true } });
+  if (!user || user.credits < CREDIT_COSTS.LIVE_SESSION) {
     return NextResponse.json({ error: "Insufficient AI credits." }, { status: 400 });
   }
 
   const booking = await prisma.$transaction(async (tx) => {
     await tx.user.update({
       where: { id: session.userId },
-      data: { aiCredits: { decrement: CREDIT_COSTS.LIVE_SESSION } },
+      data: { credits: { decrement: CREDIT_COSTS.LIVE_SESSION } },
     });
     return tx.sessionBooking.create({
       data: {

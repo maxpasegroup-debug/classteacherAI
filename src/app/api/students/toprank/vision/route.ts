@@ -59,14 +59,14 @@ export async function POST(request: Request) {
   await applyPlanExpiry(session.userId);
   const user = await prisma.user.findUnique({
     where: { id: session.userId },
-    select: { plan: true, subscriptionStatus: true, planExpiry: true },
+    select: { plan: true, subscriptionStatus: true, subscriptionExpiry: true },
   });
 
   if (
     user?.plan !== "TOP10" ||
     user.subscriptionStatus !== "ACTIVE" ||
-    !user.planExpiry ||
-    user.planExpiry < new Date()
+    !user.subscriptionExpiry ||
+    user.subscriptionExpiry < new Date()
   ) {
     return NextResponse.json({ error: "TopRank plan required.", code: "PLAN" }, { status: 403 });
   }

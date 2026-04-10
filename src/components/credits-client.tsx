@@ -28,21 +28,21 @@ const packs: Record<PackKind, { title: string; credits: number; amount: number }
 };
 
 type CreditsClientProps = {
-  initialAiCredits: number;
+  initialCredits: number;
   initialTransactions: Transaction[];
   plan: string;
   subscriptionStatus: string;
-  planExpiry: Date | string | null;
+  subscriptionExpiry: Date | string | null;
 };
 
 export function CreditsClient({
-  initialAiCredits,
+  initialCredits,
   initialTransactions,
   plan,
   subscriptionStatus,
-  planExpiry,
+  subscriptionExpiry,
 }: CreditsClientProps) {
-  const [credits, setCredits] = useState(initialAiCredits);
+  const [credits, setCredits] = useState(initialCredits);
   const [transactions, setTransactions] = useState(initialTransactions);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -51,11 +51,11 @@ export function CreditsClient({
     const res = await fetch("/api/payments/me");
     if (!res.ok) return;
     const data = await res.json();
-    setCredits(data.user?.aiCredits ?? data.user?.credits ?? 0);
+    setCredits(data.user?.credits ?? 0);
     setTransactions(data.recentTransactions ?? []);
   }
 
-  const expiry = planExpiry ? new Date(planExpiry) : null;
+  const expiry = subscriptionExpiry ? new Date(subscriptionExpiry) : null;
   const canTopUp =
     plan !== "BASIC" &&
     subscriptionStatus === "ACTIVE" &&

@@ -100,15 +100,15 @@ export async function POST(request: Request) {
     select: {
       plan: true,
       subscriptionStatus: true,
-      planExpiry: true,
-      aiCredits: true,
+      subscriptionExpiry: true,
+      credits: true,
     },
   });
   if (!user) {
     return NextResponse.json({ error: "User not found.", code: "NOT_FOUND" }, { status: 404 });
   }
 
-  if (user.subscriptionStatus !== "ACTIVE" || !user.planExpiry || user.planExpiry < new Date()) {
+  if (user.subscriptionStatus !== "ACTIVE" || !user.subscriptionExpiry || user.subscriptionExpiry < new Date()) {
     logAi("nexa_blocked", { userId: session.userId, reason: "EXPIRED" });
     return NextResponse.json(
       { error: "Your plan period has ended. Renew to use Nexa.", code: "EXPIRED" },

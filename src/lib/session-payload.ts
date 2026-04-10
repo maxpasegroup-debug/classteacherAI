@@ -10,8 +10,8 @@ export type SessionPayload = {
   roles: ("TEACHER" | "STUDENT")[];
   activeRole: "TEACHER" | "STUDENT";
   plan?: SubscriptionPlan;
-  planExpiry?: string | null;
-  aiCredits?: number;
+  subscriptionExpiry?: string | null;
+  credits?: number;
   onboardingCompleted?: boolean;
 };
 
@@ -21,6 +21,20 @@ type LegacySessionPayload = {
   email: string;
   role: "TEACHER" | "STUDENT";
 };
+
+function readSubscriptionExpiry(o: Record<string, unknown>): string | null | undefined {
+  if (o.subscriptionExpiry === null) return null;
+  if (typeof o.subscriptionExpiry === "string") return o.subscriptionExpiry;
+  if (o.planExpiry === null) return null;
+  if (typeof o.planExpiry === "string") return o.planExpiry;
+  return undefined;
+}
+
+function readCredits(o: Record<string, unknown>): number | undefined {
+  if (typeof o.credits === "number" && Number.isFinite(o.credits)) return o.credits;
+  if (typeof o.aiCredits === "number" && Number.isFinite(o.aiCredits)) return o.aiCredits;
+  return undefined;
+}
 
 export function normalizeSessionPayload(decoded: unknown): SessionPayload | null {
   if (!decoded || typeof decoded !== "object") return null;
@@ -34,14 +48,8 @@ export function normalizeSessionPayload(decoded: unknown): SessionPayload | null
     plan = o.plan;
   }
 
-  let planExpiry: string | null | undefined;
-  if (o.planExpiry === null) planExpiry = null;
-  else if (typeof o.planExpiry === "string") planExpiry = o.planExpiry;
-
-  let aiCredits: number | undefined;
-  if (typeof o.aiCredits === "number" && Number.isFinite(o.aiCredits)) {
-    aiCredits = o.aiCredits;
-  }
+  const subscriptionExpiry = readSubscriptionExpiry(o);
+  const credits = readCredits(o);
 
   let onboardingCompleted: boolean | undefined;
   if (typeof o.onboardingCompleted === "boolean") {
@@ -58,8 +66,8 @@ export function normalizeSessionPayload(decoded: unknown): SessionPayload | null
         roles,
         activeRole,
         plan,
-        planExpiry,
-        aiCredits,
+        subscriptionExpiry,
+        credits,
         onboardingCompleted,
       };
     }
@@ -73,8 +81,8 @@ export function normalizeSessionPayload(decoded: unknown): SessionPayload | null
       roles: [legacy.role],
       activeRole: legacy.role,
       plan,
-      planExpiry,
-      aiCredits,
+      subscriptionExpiry,
+      credits,
       onboardingCompleted,
     };
   }
@@ -92,8 +100,8 @@ type SessionUser = {
   email: string;
   roles: readonly ("TEACHER" | "STUDENT")[];
   plan?: SubscriptionPlan;
-  planExpiry?: Date | null;
-  aiCredits?: number;
+  subscriptionExpiry?: Date | null;
+  credits?: number;
   studentProfile?: { onboardingCompleted: boolean } | null;
 };
 
@@ -109,10 +117,10 @@ export function toSessionPayload(user: SessionUser, activeRole?: "TEACHER" | "ST
     activeRole: ar,
   };
   if (user.plan) payload.plan = user.plan;
-  if (user.planExpiry !== undefined) {
-    payload.planExpiry = user.planExpiry ? user.planExpiry.toISOString() : null;
+  if (user.subscriptionExpiry !== undefined) {
+    payload.subscriptionExpiry = user.subscriptionExpiry ? user.subscriptionExpiry.toISOString() : null;
   }
-  if (typeof user.aiCredits === "number") payload.aiCredits = user.aiCredits;
+  if (typeof user.credits === "number") payload.credits = user.credits;
   if (typeof user.studentProfile?.onboardingCompleted === "boolean") {
     payload.onboardingCompleted = user.studentProfile.onboardingCompleted;
   }

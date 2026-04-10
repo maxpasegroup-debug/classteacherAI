@@ -54,4 +54,25 @@ BEGIN
       ADD CONSTRAINT "StudentProfile_userId_fkey" FOREIGN KEY ("userId")
       REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
   END IF;
+
+  -- Rename billing columns if DB still uses legacy Prisma names
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'User' AND column_name = 'planExpiry'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'User' AND column_name = 'subscriptionExpiry'
+  ) THEN
+    ALTER TABLE "User" RENAME COLUMN "planExpiry" TO "subscriptionExpiry";
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'User' AND column_name = 'aiCredits'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'User' AND column_name = 'credits'
+  ) THEN
+    ALTER TABLE "User" RENAME COLUMN "aiCredits" TO "credits";
+  END IF;
 END $$;

@@ -149,12 +149,7 @@ export default function NexaPage() {
       const res = await fetch("/api/nexa/preferences");
       const data = await res.json().catch(() => ({}));
       if (!res.ok) return;
-      const bal =
-        typeof data.aiCredits === "number"
-          ? data.aiCredits
-          : typeof data.credits === "number"
-            ? data.credits
-            : null;
+      const bal = typeof data.credits === "number" ? data.credits : null;
       setCredits(bal);
       if (typeof data.plan === "string") setPlan(data.plan);
       if (data.nexaPersona === "top10_trainer" || data.nexaPersona === "pro" || data.nexaPersona === "basic") {
@@ -191,12 +186,7 @@ export default function NexaPage() {
       const ar = data.user.activeRole as Mode;
       setActiveRole(ar);
       setPlan(typeof data.user.plan === "string" ? data.user.plan : null);
-      const bal =
-        typeof data.user.aiCredits === "number"
-          ? data.user.aiCredits
-          : typeof data.user.credits === "number"
-            ? data.user.credits
-            : null;
+      const bal = typeof data.user.credits === "number" ? data.user.credits : null;
       setCredits(bal);
     } catch {
       /* ignore */
@@ -277,12 +267,7 @@ export default function NexaPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        const bal =
-          typeof data.aiCredits === "number"
-            ? data.aiCredits
-            : typeof data.credits === "number"
-              ? data.credits
-              : null;
+        const bal = typeof data.credits === "number" ? data.credits : null;
         if (bal !== null) setCredits(bal);
       }
       setPrefsDirty(false);

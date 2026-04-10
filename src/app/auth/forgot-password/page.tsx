@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AuthShell } from "@/components/auth-shell";
+import { PasswordField } from "@/components/password-field";
 
 export default function ForgotPasswordPage() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -21,17 +22,17 @@ export default function ForgotPasswordPage() {
     setSuccess("");
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/forgot-password/send-otp", {
+      const res = await fetch("/api/auth/send-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? "Could not send OTP.");
+        setError(data.message ?? data.error ?? "Could not send code.");
         return;
       }
-      setSuccess("If this email exists, OTP has been sent.");
+      setSuccess(data.message ?? "If this email exists, a code has been sent.");
       setStep(2);
     } catch {
       setError("Network error. Please try again.");
@@ -45,14 +46,14 @@ export default function ForgotPasswordPage() {
     setError("");
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/forgot-password/verify-otp", {
+      const res = await fetch("/api/auth/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, otp }),
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? "OTP verification failed.");
+        setError(data.message ?? data.error ?? "Verification failed.");
         return;
       }
       setResetToken(data.resetToken);
@@ -69,17 +70,17 @@ export default function ForgotPasswordPage() {
     setError("");
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/forgot-password/reset", {
+      const res = await fetch("/api/auth/reset-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ resetToken, newPassword }),
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? "Password reset failed.");
+        setError(data.message ?? data.error ?? "Password reset failed.");
         return;
       }
-      setSuccess("Password reset complete. You can login now.");
+      setSuccess(data.message ?? "Password updated. You can sign in now.");
       setStep(1);
       setOtp("");
       setNewPassword("");
@@ -94,7 +95,7 @@ export default function ForgotPasswordPage() {
   return (
     <AuthShell
       title="Forgot password"
-      subtitle="Verify with OTP and set a new password."
+      subtitle="Verify with a 6-digit code sent to your email, then set a new password."
       footer={
         <>
           Back to{" "}
@@ -106,54 +107,88 @@ export default function ForgotPasswordPage() {
     >
       <AnimatePresence mode="wait">
         {step === 1 ? (
-          <motion.form key="email" onSubmit={sendOtp} initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }} className="space-y-4">
+          <motion.form
+            key="email"
+            onSubmit={sendOtp}
+            initial={{ opacity: 0, x: 12 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -12 }}
+            className="space-y-4"
+          >
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Email</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                required
                 className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-blue-400"
               />
             </div>
-            <button className="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800" disabled={loading}>
-              {loading ? "Sending..." : "Send OTP"}
+            <button
+              className="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800"
+              disabled={loading}
+            >
+              {loading ? "Sending..." : "Send code"}
             </button>
           </motion.form>
         ) : step === 2 ? (
-          <motion.form key="otp" onSubmit={verifyOtp} initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }} className="space-y-4">
+          <motion.form
+            key="otp"
+            onSubmit={verifyOtp}
+            initial={{ opacity: 0, x: 12 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -12 }}
+            className="space-y-4"
+          >
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">OTP</label>
+              <label className="mb-1 block text-sm font-medium text-slate-700">6-digit code</label>
               <input
                 value={otp}
                 onChange={(e) => setOtp(e.target.value)}
                 maxLength={6}
                 className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm tracking-[0.2em] outline-none focus:border-blue-400"
-                placeholder="123456"
+                placeholder="000000"
               />
             </div>
             <div className="flex gap-3">
-              <button type="button" onClick={() => setStep(1)} className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700">
+              <button
+                type="button"
+                onClick={() => setStep(1)}
+                className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700"
+              >
                 Back
               </button>
-              <button className="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800" disabled={loading}>
-                {loading ? "Verifying..." : "Verify OTP"}
+              <button
+                className="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800"
+                disabled={loading}
+              >
+                {loading ? "Verifying..." : "Verify"}
               </button>
             </div>
           </motion.form>
         ) : (
-          <motion.form key="reset" onSubmit={resetPassword} initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }} className="space-y-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">New Password</label>
-              <input
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-blue-400"
-              />
-            </div>
-            <button className="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800" disabled={loading}>
-              {loading ? "Updating..." : "Reset Password"}
+          <motion.form
+            key="reset"
+            onSubmit={resetPassword}
+            initial={{ opacity: 0, x: 12 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -12 }}
+            className="space-y-4"
+          >
+            <PasswordField
+              label="New password"
+              value={newPassword}
+              onChange={setNewPassword}
+              autoComplete="new-password"
+              disabled={loading}
+            />
+            <p className="text-xs text-slate-500">At least 6 characters.</p>
+            <button
+              className="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800"
+              disabled={loading}
+            >
+              {loading ? "Updating..." : "Reset password"}
             </button>
           </motion.form>
         )}

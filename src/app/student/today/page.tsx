@@ -19,7 +19,7 @@ export default async function StudentTodayPage() {
       roles: true,
       plan: true,
       subscriptionStatus: true,
-      planExpiry: true,
+      subscriptionExpiry: true,
       studentProfile: {
         select: {
           onboardingCompleted: true,
@@ -42,7 +42,8 @@ export default async function StudentTodayPage() {
   }
 
   const paidActive =
-    user.subscriptionStatus === "ACTIVE" && Boolean(user.planExpiry && user.planExpiry > new Date());
+    user.subscriptionStatus === "ACTIVE" &&
+    Boolean(user.subscriptionExpiry && user.subscriptionExpiry > new Date());
 
   return (
     <StudentTodayClient

@@ -358,7 +358,7 @@ export function TeacherDashboardClient({ initialCredits }: Props) {
       void fetch("/api/auth/me")
         .then((r) => r.json())
         .then((d) => {
-          const bal = d.user?.aiCredits ?? d.user?.credits;
+          const bal = d.user?.credits ?? 0;
           if (bal != null) setCredits(bal);
         })
         .catch(() => undefined);

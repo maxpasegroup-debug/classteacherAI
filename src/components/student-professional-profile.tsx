@@ -35,8 +35,8 @@ type Props = {
     nexaStudentSubject: string | null;
     plan: SubscriptionPlan;
     subscriptionStatus: SubscriptionStatus;
-    planExpiry: Date | null;
-    aiCredits: number;
+    subscriptionExpiry: Date | null;
+    credits: number;
     createdAt: Date;
   };
   vision: Vision | null;
@@ -222,14 +222,14 @@ export function StudentProfessionalProfile({ user, vision, stats, paidActive }: 
             </span>
           }
         />
-        <Row label="Renews / ends" value={formatRenewal(user.planExpiry)} />
+        <Row label="Renews / ends" value={formatRenewal(user.subscriptionExpiry)} />
         <Row
           label="AI credits"
           value={
-            user.plan === "TOP10" && user.aiCredits > 100_000 ? (
+            user.plan === "TOP10" && user.credits > 100_000 ? (
               <span className="text-zinc-300">TopRank allowance</span>
             ) : (
-              <span className="tabular-nums">{user.aiCredits.toLocaleString("en-IN")}</span>
+              <span className="tabular-nums">{user.credits.toLocaleString("en-IN")}</span>
             )
           }
         />

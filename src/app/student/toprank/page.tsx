@@ -15,7 +15,7 @@ export default async function TopRankTrainingPage() {
     select: {
       plan: true,
       subscriptionStatus: true,
-      planExpiry: true,
+      subscriptionExpiry: true,
       roles: true,
     },
   });
@@ -25,7 +25,7 @@ export default async function TopRankTrainingPage() {
   const paidTopRank =
     user.plan === "TOP10" &&
     user.subscriptionStatus === "ACTIVE" &&
-    Boolean(user.planExpiry && user.planExpiry > new Date());
+    Boolean(user.subscriptionExpiry && user.subscriptionExpiry > new Date());
 
   let initialVision: TopRankVisionDto | null = null;
   if (user.plan === "TOP10") {

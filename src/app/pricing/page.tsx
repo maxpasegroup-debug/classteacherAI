@@ -12,10 +12,9 @@ type UserData = {
   roles: ("TEACHER" | "STUDENT")[];
   activeRole: "TEACHER" | "STUDENT";
   plan: string;
-  aiCredits?: number;
   credits?: number;
   subscriptionStatus?: string;
-  planExpiry?: string | null;
+  subscriptionExpiry?: string | null;
 };
 
 type ModalTarget =
@@ -24,8 +23,8 @@ type ModalTarget =
 
 function isPaidPeriod(user: UserData | null): boolean {
   if (!user || user.subscriptionStatus !== "ACTIVE") return false;
-  if (!user.planExpiry) return false;
-  const ex = new Date(user.planExpiry);
+  if (!user.subscriptionExpiry) return false;
+  const ex = new Date(user.subscriptionExpiry);
   return !Number.isNaN(ex.getTime()) && ex > new Date();
 }
 
@@ -118,7 +117,7 @@ export default function PricingPage() {
 
   const recommendedKey: "PRO" | "TOP10" = user?.activeRole === "TEACHER" ? "PRO" : "TOP10";
 
-  const creditBalance = user?.aiCredits ?? user?.credits ?? 0;
+  const creditBalance = user?.credits ?? 0;
 
   const tierOrder = ["BASIC", "PRO", "TOP10"] as const;
 
@@ -145,11 +144,11 @@ export default function PricingPage() {
               {!paidActive ? <span className="text-amber-700"> · Preview — subscribe to unlock features</span> : null}
               {" · "}
               AI credits: <span className="font-medium">{creditBalance}</span>
-              {user.planExpiry ? (
+              {user.subscriptionExpiry ? (
                 <>
                   {" "}
                   · Renews / expires:{" "}
-                  <span className="font-medium">{new Date(user.planExpiry).toLocaleDateString()}</span>
+                  <span className="font-medium">{new Date(user.subscriptionExpiry).toLocaleDateString()}</span>
                 </>
               ) : null}
             </p>

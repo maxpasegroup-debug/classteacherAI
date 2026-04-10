@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 export async function GET() {
   const session = await getCurrentSession();
   if (!session) {
-    return NextResponse.json({ success: false, user: null }, { status: 401 });
+    return NextResponse.json({ success: false, message: "Not signed in.", user: null }, { status: 401 });
   }
 
   await applyPlanExpiry(session.userId);
@@ -22,19 +22,19 @@ export async function GET() {
       email: true,
       roles: true,
       plan: true,
-      aiCredits: true,
+      credits: true,
       subscriptionStatus: true,
-      planExpiry: true,
+      subscriptionExpiry: true,
       studentProfile: { select: { onboardingCompleted: true } },
     },
   });
 
   if (!user) {
-    return NextResponse.json({ success: false, user: null }, { status: 401 });
+    return NextResponse.json({ success: false, message: "Session invalid.", user: null }, { status: 401 });
   }
 
   if (!user.roles.includes("STUDENT")) {
-    return NextResponse.json({ success: false, user: null }, { status: 401 });
+    return NextResponse.json({ success: false, message: "Student access required.", user: null }, { status: 401 });
   }
 
   const activeRole = "STUDENT";
@@ -43,8 +43,9 @@ export async function GET() {
     JSON.stringify([...user.roles].sort()) !== JSON.stringify([...session.roles].sort());
   const planSynced = session.plan !== user.plan;
   const expirySynced =
-    (session.planExpiry ?? null) !== (user.planExpiry ? user.planExpiry.toISOString() : null);
-  const creditsSynced = session.aiCredits !== user.aiCredits;
+    (session.subscriptionExpiry ?? null) !==
+    (user.subscriptionExpiry ? user.subscriptionExpiry.toISOString() : null);
+  const creditsSynced = session.credits !== user.credits;
 
   if (rolesSynced || activeRole !== session.activeRole || planSynced || expirySynced || creditsSynced) {
     const token = signSessionToken(toSessionPayload(user, activeRole));
@@ -62,9 +63,9 @@ export async function GET() {
       roles: user.roles,
       activeRole,
       plan: user.plan,
-      aiCredits: user.aiCredits,
+      credits: user.credits,
       subscriptionStatus: user.subscriptionStatus,
-      planExpiry: user.planExpiry,
+      subscriptionExpiry: user.subscriptionExpiry,
       onboardingCompleted,
     },
     redirectTo: onboardingCompleted ? "/dashboard" : "/onboarding",

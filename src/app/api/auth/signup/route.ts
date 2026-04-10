@@ -1,25 +1,31 @@
-import bcrypt from "bcryptjs";
 import { setSessionCookie, signSessionToken } from "@/lib/auth";
-import { toSessionPayload } from "@/lib/session-payload";
+import { authJsonError } from "@/lib/auth-responses";
+import { hashPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
+import { signupStudentSchema } from "@/lib/validators";
+import { toSessionPayload } from "@/lib/session-payload";
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
-    const { name, email, password } = await req.json();
+    const body = await req.json();
+    const parsed = signupStudentSchema.safeParse(body);
 
-    if (!name?.trim() || !email || !password) {
-      return Response.json({ error: "Missing fields" }, { status: 400 });
+    if (!parsed.success) {
+      const msg = parsed.error.flatten().fieldErrors.password?.[0] ?? parsed.error.flatten().fieldErrors.name?.[0] ?? "Please check your details.";
+      return authJsonError(msg, 400);
     }
+
+    const { name, email, password } = parsed.data;
 
     const existingUser = await prisma.user.findUnique({ where: { email } });
 
     if (existingUser) {
-      return Response.json({ error: "An account with this email already exists." }, { status: 409 });
+      return authJsonError("An account with this email already exists.", 409);
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await hashPassword(password);
 
     const user = await prisma.user.create({
       data: {
@@ -29,8 +35,8 @@ export async function POST(req: Request) {
         roles: ["STUDENT"],
         plan: "BASIC",
         subscriptionStatus: "EXPIRED",
-        planExpiry: null,
-        aiCredits: 0,
+        subscriptionExpiry: null,
+        credits: 0,
       },
     });
 
@@ -49,9 +55,6 @@ export async function POST(req: Request) {
     });
   } catch (error) {
     console.error("SIGNUP ERROR:", error);
-    return Response.json(
-      { error: "Signup failed" },
-      { status: 500 }
-    );
+    return authJsonError("Something went wrong. Please try again.", 500);
   }
 }

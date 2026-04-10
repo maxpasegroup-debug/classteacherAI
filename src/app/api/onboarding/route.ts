@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 export async function GET() {
   const session = await getCurrentSession();
   if (!session) {
-    return NextResponse.json({ success: false, error: "Unauthorized." }, { status: 401 });
+    return NextResponse.json({ success: false, message: "Unauthorized." }, { status: 401 });
   }
 
   const profile = await prisma.studentProfile.findUnique({
@@ -38,7 +38,7 @@ export async function GET() {
 export async function POST(request: Request) {
   const session = await getCurrentSession();
   if (!session) {
-    return NextResponse.json({ success: false, error: "Unauthorized." }, { status: 401 });
+    return NextResponse.json({ success: false, message: "Unauthorized." }, { status: 401 });
   }
 
   const body = (await request.json().catch(() => null)) as
@@ -58,7 +58,7 @@ export async function POST(request: Request) {
   const studyHours = Number(body?.studyHours);
 
   if (!exam || !level || !weakness || !Number.isFinite(targetRank) || !Number.isFinite(studyHours)) {
-    return NextResponse.json({ success: false, error: "Please complete all onboarding fields." }, { status: 400 });
+    return NextResponse.json({ success: false, message: "Please complete all onboarding fields." }, { status: 400 });
   }
 
   const generated = buildStudentRankProfile({
@@ -116,8 +116,8 @@ export async function POST(request: Request) {
       email: true,
       roles: true,
       plan: true,
-      planExpiry: true,
-      aiCredits: true,
+      subscriptionExpiry: true,
+      credits: true,
       studentProfile: { select: { onboardingCompleted: true } },
     },
   });

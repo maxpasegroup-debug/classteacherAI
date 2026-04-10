@@ -21,9 +21,9 @@ export default async function StudentProfilePage() {
         email: true,
         roles: true,
         plan: true,
-        aiCredits: true,
+        credits: true,
         subscriptionStatus: true,
-        planExpiry: true,
+        subscriptionExpiry: true,
         nexaStudentLevel: true,
         nexaStudentSubject: true,
         createdAt: true,
@@ -52,7 +52,8 @@ export default async function StudentProfilePage() {
   if (!user?.roles.includes("STUDENT")) redirect("/auth/login");
 
   const paidActive =
-    user.subscriptionStatus === "ACTIVE" && Boolean(user.planExpiry && user.planExpiry > new Date());
+    user.subscriptionStatus === "ACTIVE" &&
+    Boolean(user.subscriptionExpiry && user.subscriptionExpiry > new Date());
 
   const attemptStats = computeAttemptStats(attempts);
   const stats = {
@@ -71,8 +72,8 @@ export default async function StudentProfilePage() {
         nexaStudentSubject: user.nexaStudentSubject,
         plan: user.plan,
         subscriptionStatus: user.subscriptionStatus,
-        planExpiry: user.planExpiry,
-        aiCredits: user.aiCredits,
+        subscriptionExpiry: user.subscriptionExpiry,
+        credits: user.credits,
         createdAt: user.createdAt,
       }}
       vision={vision}

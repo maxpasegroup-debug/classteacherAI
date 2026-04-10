@@ -2,7 +2,7 @@ import type { SubscriptionPlan, SubscriptionStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { PLANS } from "@/lib/pricing";
 
-/** Cost in AI credits per Nexa / teacher-generate completion (PRO). TOP10 skips per-request deduction. */
+/** Cost in credits per Nexa / teacher-generate completion (PRO). TOP10 skips per-request deduction. */
 export const AI_REQUEST_CREDIT_COST = 1;
 
 /** BASIC (student): max exam starts per UTC day. */
@@ -27,16 +27,16 @@ export function basicTrialEnd(from: Date = new Date()) {
 }
 
 /**
- * When plan period ends: downgrade paid tiers to BASIC trial state or mark expired.
+ * When subscription period ends: downgrade paid tiers to BASIC trial state or mark expired.
  */
 export async function applyPlanExpiry(userId: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { plan: true, subscriptionStatus: true, planExpiry: true },
+    select: { plan: true, subscriptionStatus: true, subscriptionExpiry: true },
   });
-  if (!user?.planExpiry || user.subscriptionStatus !== "ACTIVE") return user;
+  if (!user?.subscriptionExpiry || user.subscriptionStatus !== "ACTIVE") return user;
 
-  if (user.planExpiry >= new Date()) return user;
+  if (user.subscriptionExpiry >= new Date()) return user;
 
   if (user.plan === "PRO" || user.plan === "TOP10") {
     await prisma.user.update({
@@ -44,11 +44,16 @@ export async function applyPlanExpiry(userId: string) {
       data: {
         plan: "BASIC",
         subscriptionStatus: "EXPIRED",
-        planExpiry: null,
-        aiCredits: 0,
+        subscriptionExpiry: null,
+        credits: 0,
       },
     });
-    return { ...user, plan: "BASIC" as SubscriptionPlan, subscriptionStatus: "EXPIRED" as SubscriptionStatus, planExpiry: null };
+    return {
+      ...user,
+      plan: "BASIC" as SubscriptionPlan,
+      subscriptionStatus: "EXPIRED" as SubscriptionStatus,
+      subscriptionExpiry: null,
+    };
   }
 
   if (user.plan === "BASIC") {
@@ -56,8 +61,8 @@ export async function applyPlanExpiry(userId: string) {
       where: { id: userId },
       data: {
         subscriptionStatus: "EXPIRED",
-        planExpiry: null,
-        aiCredits: 0,
+        subscriptionExpiry: null,
+        credits: 0,
       },
     });
   }
@@ -71,9 +76,9 @@ export type AiGateResult =
       user: {
         id: string;
         plan: SubscriptionPlan;
-        aiCredits: number;
+        credits: number;
         subscriptionStatus: SubscriptionStatus;
-        planExpiry: Date | null;
+        subscriptionExpiry: Date | null;
       };
       tier: "BASIC" | "PRO" | "TOP10";
     }
@@ -82,7 +87,7 @@ export type AiGateResult =
 /**
  * AI usage for paid flows (teacher generate, PRO Nexa): needs active period + credits rules.
  * TOP10: no credit balance requirement (unlimited pool).
- * PRO: must have aiCredits > 0 after gate.
+ * PRO: must have credits > 0 after gate.
  */
 export async function assertCanUseAi(userId: string): Promise<AiGateResult> {
   await applyPlanExpiry(userId);
@@ -91,9 +96,9 @@ export async function assertCanUseAi(userId: string): Promise<AiGateResult> {
     select: {
       id: true,
       plan: true,
-      aiCredits: true,
+      credits: true,
       subscriptionStatus: true,
-      planExpiry: true,
+      subscriptionExpiry: true,
     },
   });
   if (!user) return { ok: false, error: "User not found.", code: "PLAN" };
@@ -102,7 +107,7 @@ export async function assertCanUseAi(userId: string): Promise<AiGateResult> {
     return { ok: false, error: "Upgrade plan or renew subscription.", code: "SUBSCRIPTION" };
   }
 
-  if (!user.planExpiry || user.planExpiry < new Date()) {
+  if (!user.subscriptionExpiry || user.subscriptionExpiry < new Date()) {
     return { ok: false, error: "Plan period ended. Renew to use AI.", code: "EXPIRED" };
   }
 
@@ -115,7 +120,7 @@ export async function assertCanUseAi(userId: string): Promise<AiGateResult> {
   }
 
   if (user.plan === "PRO") {
-    if (user.aiCredits <= 0) {
+    if (user.credits <= 0) {
       return { ok: false, error: "No AI credits remaining. Top up or upgrade.", code: "CREDITS" };
     }
     return { ok: true, user, tier: "PRO" };
@@ -127,8 +132,8 @@ export async function assertCanUseAi(userId: string): Promise<AiGateResult> {
 export async function deductAiCredits(userId: string, cost: number = AI_REQUEST_CREDIT_COST): Promise<boolean> {
   try {
     const result = await prisma.user.updateMany({
-      where: { id: userId, aiCredits: { gte: cost } },
-      data: { aiCredits: { decrement: cost } },
+      where: { id: userId, credits: { gte: cost } },
+      data: { credits: { decrement: cost } },
     });
     return result.count === 1;
   } catch {
@@ -139,15 +144,15 @@ export async function deductAiCredits(userId: string, cost: number = AI_REQUEST_
 export async function refundAiCredits(userId: string, cost: number = AI_REQUEST_CREDIT_COST): Promise<void> {
   await prisma.user.update({
     where: { id: userId },
-    data: { aiCredits: { increment: cost } },
+    data: { credits: { increment: cost } },
   });
 }
 
-export function aiCreditsForNewSubscription(plan: SubscriptionPlan): number {
+export function creditsForNewSubscription(plan: SubscriptionPlan): number {
   if (plan === "PRO") return PLANS.PRO.creditsIncluded;
   if (plan === "TOP10") return PLANS.TOP10.creditsIncluded;
   return 0;
 }
 
-/** @deprecated Use aiCreditsForNewSubscription — alias for payment fulfillment. */
-export const creditsForNewSubscription = aiCreditsForNewSubscription;
+/** @deprecated Use creditsForNewSubscription */
+export const aiCreditsForNewSubscription = creditsForNewSubscription;

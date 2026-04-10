@@ -23,13 +23,13 @@ export function planAllowsFeature(plan: SubscriptionPlan, feature: StudentFeatur
 }
 
 /**
- * Student must have ACTIVE status and plan period not ended (planExpiry in the future).
+ * Student must have ACTIVE status and subscription period not ended.
  */
 export async function requireActiveStudentPlan(userId: string) {
   await applyPlanExpiry(userId);
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { plan: true, subscriptionStatus: true, planExpiry: true },
+    select: { plan: true, subscriptionStatus: true, subscriptionExpiry: true },
   });
   if (!user) {
     return { ok: false as const, code: "NOT_FOUND" as const, error: "User not found." };
@@ -37,7 +37,7 @@ export async function requireActiveStudentPlan(userId: string) {
   if (user.subscriptionStatus !== "ACTIVE") {
     return { ok: false as const, code: "SUBSCRIPTION" as const, error: "Subscription inactive. Renew or upgrade." };
   }
-  if (!user.planExpiry || user.planExpiry < new Date()) {
+  if (!user.subscriptionExpiry || user.subscriptionExpiry < new Date()) {
     return { ok: false as const, code: "EXPIRED" as const, error: "Plan period ended. Renew to continue." };
   }
   return { ok: true as const, user };

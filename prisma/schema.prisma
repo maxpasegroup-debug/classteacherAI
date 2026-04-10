@@ -79,10 +79,10 @@ model User {
   roles          UserRole[]           @default([])
   plan           SubscriptionPlan   @default(BASIC)
   subscriptionStatus SubscriptionStatus @default(ACTIVE)
-  /// Current plan period end (trial end for BASIC, billing period end for paid tiers).
-  planExpiry     DateTime?
-  /// AI usage credits (Nexa, teacher generate, etc.); TOP10 gets a very large grant.
-  aiCredits      Int                @default(0)
+  /// Current subscription period end (trial end for BASIC, billing period end for paid tiers).
+  subscriptionExpiry DateTime?
+  /// AI / product credits (Nexa, sessions, etc.).
+  credits        Int                @default(0)
   /// Optional Nexa context (student): grade/class level, e.g. "Grade 9", "Class 12"
   nexaStudentLevel   String?
   /// Primary subject the student is studying in Nexa

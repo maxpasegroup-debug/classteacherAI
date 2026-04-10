@@ -21,19 +21,19 @@ export async function POST(request: Request) {
   }
 
   const requiredCredits = CREDIT_COSTS[body.action];
-  const user = await prisma.user.findUnique({ where: { id: session.userId }, select: { aiCredits: true } });
+  const user = await prisma.user.findUnique({ where: { id: session.userId }, select: { credits: true } });
   if (!user) {
     return NextResponse.json({ error: "User not found." }, { status: 404 });
   }
-  if (user.aiCredits < requiredCredits) {
+  if (user.credits < requiredCredits) {
     return NextResponse.json({ error: "Insufficient AI credits." }, { status: 400 });
   }
 
   const updated = await prisma.user.update({
     where: { id: session.userId },
-    data: { aiCredits: { decrement: requiredCredits } },
-    select: { aiCredits: true },
+    data: { credits: { decrement: requiredCredits } },
+    select: { credits: true },
   });
 
-  return NextResponse.json({ ok: true, remainingCredits: updated.aiCredits });
+  return NextResponse.json({ ok: true, remainingCredits: updated.credits });
 }

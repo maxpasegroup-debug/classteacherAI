@@ -28,7 +28,7 @@ export async function POST(request: Request) {
   await applyPlanExpiry(session.userId);
   const user = await prisma.user.findUnique({
     where: { id: session.userId },
-    select: { plan: true, subscriptionStatus: true, planExpiry: true },
+    select: { plan: true, subscriptionStatus: true, subscriptionExpiry: true },
   });
   if (!user) {
     return NextResponse.json({ error: "User not found.", code: "NOT_FOUND" }, { status: 404 });
@@ -50,7 +50,7 @@ export async function POST(request: Request) {
         { status: 403 },
       );
     }
-    if (!user.planExpiry || user.planExpiry < new Date()) {
+    if (!user.subscriptionExpiry || user.subscriptionExpiry < new Date()) {
       return NextResponse.json(
         { error: "Subscription expired. Renew your plan to top up credits.", code: "SUBSCRIPTION" },
         { status: 403 },

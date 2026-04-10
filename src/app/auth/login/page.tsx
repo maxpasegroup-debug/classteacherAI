@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { AuthShell } from "@/components/auth-shell";
+import { PasswordField } from "@/components/password-field";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -25,7 +26,7 @@ export default function LoginPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? "Login failed.");
+        setError(data.message ?? data.error ?? "Login failed.");
         return;
       }
       router.push(data?.redirectTo ?? "/dashboard");
@@ -59,15 +60,7 @@ export default function LoginPage() {
             className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-blue-400"
           />
         </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">Password</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-blue-400"
-          />
-        </div>
+        <PasswordField label="Password" value={password} onChange={setPassword} autoComplete="current-password" disabled={loading} />
         <div className="flex items-center justify-between">
           <Link href="/auth/forgot-password" className="text-sm font-medium text-emerald-700 hover:text-emerald-800">
             Forgot password?

@@ -17,7 +17,7 @@ export async function GET() {
       nexaStudentLevel: true,
       nexaStudentSubject: true,
       nexaTeacherSubject: true,
-      aiCredits: true,
+      credits: true,
     },
   });
 
@@ -42,8 +42,7 @@ export async function GET() {
   return NextResponse.json({
     activeRole: session.activeRole,
     plan: user.plan,
-    aiCredits: user.aiCredits,
-    credits: user.aiCredits,
+    credits: user.credits,
     nexaStudentLevel: user.nexaStudentLevel,
     nexaStudentSubject: user.nexaStudentSubject,
     nexaTeacherSubject: user.nexaTeacherSubject,
@@ -91,13 +90,12 @@ export async function PATCH(request: Request) {
       nexaStudentLevel: true,
       nexaStudentSubject: true,
       nexaTeacherSubject: true,
-      aiCredits: true,
+      credits: true,
     },
   });
 
   return NextResponse.json({
-    aiCredits: updated.aiCredits,
-    credits: updated.aiCredits,
+    credits: updated.credits,
     nexaStudentLevel: updated.nexaStudentLevel,
     nexaStudentSubject: updated.nexaStudentSubject,
     nexaTeacherSubject: updated.nexaTeacherSubject,

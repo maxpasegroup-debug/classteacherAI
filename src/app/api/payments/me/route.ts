@@ -21,9 +21,9 @@ export async function GET() {
       email: true,
       roles: true,
       plan: true,
-      aiCredits: true,
+      credits: true,
       subscriptionStatus: true,
-      planExpiry: true,
+      subscriptionExpiry: true,
     },
   });
   if (!user) {

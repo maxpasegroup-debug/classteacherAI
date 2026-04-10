@@ -1,34 +1,36 @@
-import bcrypt from "bcryptjs";
 import { setSessionCookie, signSessionToken } from "@/lib/auth";
+import { authJsonError } from "@/lib/auth-responses";
 import { applyPlanExpiry } from "@/lib/billing";
+import { comparePassword } from "@/lib/password";
 import { toSessionPayload } from "@/lib/session-payload";
 import { prisma } from "@/lib/prisma";
+import { loginSchema } from "@/lib/validators";
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
-    const { email, password } = await req.json();
+    const body = await req.json();
+    const parsed = loginSchema.safeParse(body);
 
-    if (!email || !password) {
-      return Response.json(
-        { error: "Email and password required" },
-        { status: 400 }
-      );
+    if (!parsed.success) {
+      return authJsonError("Enter a valid email and password.", 400);
     }
+
+    const { email, password } = parsed.data;
 
     const user = await prisma.user.findUnique({
       where: { email },
     });
 
     if (!user) {
-      return Response.json({ error: "Invalid email or password." }, { status: 400 });
+      return authJsonError("Invalid email or password.", 401);
     }
 
-    const isValid = await bcrypt.compare(password, user.password);
+    const isValid = await comparePassword(password, user.password);
 
     if (!isValid) {
-      return Response.json({ error: "Invalid email or password." }, { status: 400 });
+      return authJsonError("Invalid email or password.", 401);
     }
 
     if (!user.roles.includes("STUDENT")) {
@@ -44,7 +46,7 @@ export async function POST(req: Request) {
       include: { studentProfile: { select: { onboardingCompleted: true } } },
     });
     if (!refreshed) {
-      return Response.json({ error: "Login failed" }, { status: 500 });
+      return authJsonError("Login failed. Please try again.", 500);
     }
 
     const payload = toSessionPayload(refreshed, "STUDENT");
@@ -64,9 +66,6 @@ export async function POST(req: Request) {
     });
   } catch (error) {
     console.error("LOGIN ERROR:", error);
-    return Response.json(
-      { error: "Login failed" },
-      { status: 500 }
-    );
+    return authJsonError("Something went wrong. Please try again.", 500);
   }
 }

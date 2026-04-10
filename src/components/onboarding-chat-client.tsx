@@ -94,7 +94,7 @@ export function OnboardingChatClient({ defaultName }: { defaultName: string }) {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data.error ?? "Could not save onboarding details.");
+        setError(data.message ?? data.error ?? "Could not save onboarding details.");
         return;
       }
       router.push("/dashboard");

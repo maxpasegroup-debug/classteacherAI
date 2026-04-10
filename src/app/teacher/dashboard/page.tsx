@@ -14,7 +14,7 @@ export default async function TeacherDashboardPage() {
 
   const user = await prisma.user.findUnique({
     where: { id: session.userId },
-    select: { name: true, email: true, roles: true, plan: true, aiCredits: true },
+    select: { name: true, email: true, roles: true, plan: true, credits: true },
   });
 
   if (!user || !user.roles.includes("TEACHER")) {
@@ -29,7 +29,7 @@ export default async function TeacherDashboardPage() {
           <p className="mt-2 text-sm text-slate-600">Welcome back, {user.name}.</p>
           <p className="mt-1 text-sm text-slate-600">{user.email}</p>
           <p className="mt-1 text-xs text-slate-500">
-            Plan: {subscriptionTierLabel(user.plan)} · AI credits: {user.aiCredits}
+            Plan: {subscriptionTierLabel(user.plan)} · AI credits: {user.credits}
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <RoleSwitcher roles={user.roles} activeRole={session.activeRole} />
@@ -76,7 +76,7 @@ export default async function TeacherDashboardPage() {
           </Link>
         </div>
 
-        <TeacherDashboardClient initialCredits={user.aiCredits} />
+        <TeacherDashboardClient initialCredits={user.credits} />
       </section>
     </main>
   );

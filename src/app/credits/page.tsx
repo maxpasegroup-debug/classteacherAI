@@ -14,7 +14,7 @@ export default async function CreditsPage() {
 
   const user = await prisma.user.findUnique({
     where: { id: session.userId },
-    select: { aiCredits: true, plan: true, subscriptionStatus: true, planExpiry: true },
+    select: { credits: true, plan: true, subscriptionStatus: true, subscriptionExpiry: true },
   });
   if (!user) {
     redirect("/auth/login");
@@ -30,10 +30,10 @@ export default async function CreditsPage() {
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-8">
       <CreditsClient
-        initialAiCredits={user.aiCredits}
+        initialCredits={user.credits}
         plan={user.plan}
         subscriptionStatus={user.subscriptionStatus}
-        planExpiry={user.planExpiry}
+        subscriptionExpiry={user.subscriptionExpiry}
         initialTransactions={recentTransactions.map((item) => ({
           ...item,
           createdAt: item.createdAt.toISOString(),

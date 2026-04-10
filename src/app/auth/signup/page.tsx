@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useMemo, useState } from "react";
 import { AuthShell } from "@/components/auth-shell";
+import { PasswordField } from "@/components/password-field";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -13,7 +14,14 @@ export default function SignupPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const canSubmit = useMemo(() => name.trim().length >= 2 && email.includes("@") && password.length >= 8, [name, email, password]);
+  const emailOk = useMemo(() => {
+    const t = email.trim();
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t);
+  }, [email]);
+  const canSubmit = useMemo(
+    () => name.trim().length >= 1 && emailOk && password.length >= 6,
+    [name, emailOk, password],
+  );
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -29,7 +37,7 @@ export default function SignupPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error ?? "Could not create account.");
+        setError(data.message ?? data.error ?? "Could not create account.");
         return;
       }
 
@@ -57,16 +65,33 @@ export default function SignupPage() {
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">Name</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-blue-400" />
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            autoComplete="name"
+            className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-blue-400"
+          />
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">Email</label>
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-blue-400" />
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoComplete="email"
+            className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-blue-400"
+          />
         </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">Password</label>
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-blue-400" />
-        </div>
+        <PasswordField
+          label="Password"
+          value={password}
+          onChange={setPassword}
+          autoComplete="new-password"
+          disabled={loading}
+        />
+        <p className="text-xs text-slate-500">At least 6 characters.</p>
         <button
           type="submit"
           disabled={loading || !canSubmit}

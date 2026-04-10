@@ -9,9 +9,16 @@ export const signupSchema = z.object({
   role: z.enum(["TEACHER", "STUDENT"]),
 });
 
+/** Student-only signup: password min 6 per product auth spec. */
+export const signupStudentSchema = z.object({
+  name: z.string().trim().min(1, "Name is required.").max(120),
+  email: emailSchema,
+  password: z.string().min(6, "Password must be at least 6 characters.").max(72),
+});
+
 export const loginSchema = z.object({
   email: emailSchema,
-  password: z.string().min(8).max(72),
+  password: z.string().min(1, "Password is required.").max(72),
 });
 
 export const forgotPasswordEmailSchema = z.object({
@@ -25,5 +32,5 @@ export const verifyOtpSchema = z.object({
 
 export const resetPasswordSchema = z.object({
   resetToken: z.string().min(20),
-  newPassword: z.string().min(8).max(72),
+  newPassword: z.string().min(6, "Password must be at least 6 characters.").max(72),
 });

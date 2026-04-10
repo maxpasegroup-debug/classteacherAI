@@ -1,5 +1,5 @@
 import type { Prisma, SubscriptionPlan, TransactionType } from "@prisma/client";
-import { aiCreditsForNewSubscription, subscriptionPeriodEnd } from "@/lib/billing";
+import { creditsForNewSubscription, subscriptionPeriodEnd } from "@/lib/billing";
 
 type Tx = Prisma.TransactionClient;
 
@@ -26,7 +26,7 @@ export async function applyTransactionFulfillment(
         data: {
           plan: "BASIC",
           subscriptionStatus: "ACTIVE",
-          planExpiry: subscriptionPeriodEnd(),
+          subscriptionExpiry: subscriptionPeriodEnd(),
         },
       });
       return;
@@ -38,8 +38,8 @@ export async function applyTransactionFulfillment(
         data: {
           plan: transaction.plan,
           subscriptionStatus: "ACTIVE",
-          planExpiry: subscriptionPeriodEnd(),
-          aiCredits: { increment: aiCreditsForNewSubscription(transaction.plan) },
+          subscriptionExpiry: subscriptionPeriodEnd(),
+          credits: { increment: creditsForNewSubscription(transaction.plan) },
         },
       });
     }
@@ -49,7 +49,7 @@ export async function applyTransactionFulfillment(
   if (transaction.type === "CREDIT_PURCHASE" && transaction.creditsPurchased && transaction.creditsPurchased > 0) {
     await tx.user.update({
       where: { id: transaction.userId },
-      data: { aiCredits: { increment: transaction.creditsPurchased } },
+      data: { credits: { increment: transaction.creditsPurchased } },
     });
   }
 }
