@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   const session = await getCurrentSession();
-  if (!session || session.activeRole !== "TEACHER") {
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
@@ -18,9 +18,9 @@ export async function POST(request: Request) {
 
   const student = await prisma.user.findUnique({
     where: { id: body.studentId },
-    select: { id: true, name: true, email: true, roles: true },
+    select: { id: true, name: true, email: true },
   });
-  if (!student || !student.roles.includes("STUDENT")) {
+  if (!student) {
     return NextResponse.json({ error: "Student not found." }, { status: 404 });
   }
 

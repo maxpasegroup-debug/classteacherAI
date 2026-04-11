@@ -1,10 +1,11 @@
 import type { NexaCapability, NexaMode } from "@prisma/client";
+import { isTopRankPlan } from "@/lib/plan-tier";
 
 export type StudentNexaPersona = "basic" | "pro" | "top10_trainer";
 
 export function studentPersonaFromPlan(plan: string): StudentNexaPersona {
-  if (plan === "TOP10") return "top10_trainer";
-  if (plan === "PRO") return "pro";
+  if (isTopRankPlan(plan)) return "top10_trainer";
+  if (plan === "PRO" || plan === "ELITE") return "pro";
   return "basic";
 }
 

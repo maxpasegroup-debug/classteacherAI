@@ -61,7 +61,7 @@ function scopePayload(ranked: RankedUser[], viewerId: string, names: Map<string,
 
 export async function GET() {
   const session = await getCurrentSession();
-  if (!session || session.activeRole !== "STUDENT") {
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized.", code: "UNAUTHORIZED" }, { status: 401 });
   }
 
@@ -98,8 +98,8 @@ export async function GET() {
 
   return NextResponse.json({
     label: "TopRank Achievers",
-    tagline: "Compete on accuracy, speed, and consistency — only the top 10 earn the spotlight each window.",
-    formula: `${rankCompositeFormulaLine()} (speed scored vs peers in the same window — faster = higher).`,
+    tagline: "Compete on accuracy, speed, and consistency â€” only the top 10 earn the spotlight each window.",
+    formula: `${rankCompositeFormulaLine()} (speed scored vs peers in the same window â€” faster = higher).`,
     leaderboardSize: TOP_N,
     criteria: [
       {
@@ -112,13 +112,13 @@ export async function GET() {
         id: "speed",
         label: "Speed",
         weightPct: RANK_COMPOSITE_PCT.speed,
-        hint: "Seconds per question vs other ranked learners — beat the clock, not just the paper.",
+        hint: "Seconds per question vs other ranked learners â€” beat the clock, not just the paper.",
       },
       {
         id: "consistency",
         label: "Consistency",
         weightPct: RANK_COMPOSITE_PCT.consistency,
-        hint: "Stability of accuracy — fewer wild swings means a higher score.",
+        hint: "Stability of accuracy â€” fewer wild swings means a higher score.",
       },
     ],
     windows: [

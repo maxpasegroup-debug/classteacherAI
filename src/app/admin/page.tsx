@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 
 function isAdminEmail(email: string) {
   const list = (process.env.ADMIN_EMAILS ?? "").split(",").map((x) => x.trim()).filter(Boolean);
@@ -9,8 +10,13 @@ function isAdminEmail(email: string) {
 export default async function AdminPage() {
   const session = await getCurrentSession();
   if (!session) redirect("/auth/login");
-  if (!isAdminEmail(session.email)) {
-    redirect(session.activeRole === "TEACHER" ? "/teacher/dashboard" : "/student/today");
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { email: true },
+  });
+  if (!user || !isAdminEmail(user.email)) {
+    redirect("/student/today");
   }
 
   return (

@@ -7,12 +7,13 @@ import {
   formatGoalCardLine,
   isValidExamTrack,
 } from "@/lib/toprank-vision";
+import { isTopRankPlan } from "@/lib/plan-tier";
 
 export const runtime = "nodejs";
 
 export async function GET() {
   const session = await getCurrentSession();
-  if (!session || session.activeRole !== "STUDENT") {
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
@@ -22,7 +23,7 @@ export async function GET() {
     select: { plan: true },
   });
 
-  if (user?.plan !== "TOP10") {
+  if (!user?.plan || !isTopRankPlan(user.plan)) {
     return NextResponse.json({ vision: null, topRank: false });
   }
 
@@ -52,7 +53,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const session = await getCurrentSession();
-  if (!session || session.activeRole !== "STUDENT") {
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
@@ -63,7 +64,8 @@ export async function POST(request: Request) {
   });
 
   if (
-    user?.plan !== "TOP10" ||
+    !user?.plan ||
+    !isTopRankPlan(user.plan) ||
     user.subscriptionStatus !== "ACTIVE" ||
     !user.subscriptionExpiry ||
     user.subscriptionExpiry < new Date()
@@ -129,7 +131,7 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   const session = await getCurrentSession();
-  if (!session || session.activeRole !== "STUDENT") {
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
@@ -139,7 +141,7 @@ export async function PATCH(request: Request) {
     select: { plan: true },
   });
 
-  if (user?.plan !== "TOP10") {
+  if (!user?.plan || !isTopRankPlan(user.plan)) {
     return NextResponse.json({ error: "TopRank plan required." }, { status: 403 });
   }
 

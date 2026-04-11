@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { SubscriptionPlan } from "@prisma/client";
+import { isTopRankPlan } from "@/lib/plan-tier";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { RootCareFunnelNudge } from "@/components/rootcare-funnel-nudge";
 import { UnlockRankJourneyModal } from "@/components/unlock-rank-journey-modal";
@@ -24,7 +24,7 @@ type AttemptRow = {
 type PreviewProps = {
   previewOnly: boolean;
   userName: string;
-  plan: SubscriptionPlan;
+  plan: string;
   rankProfile?: {
     targetRank: number;
     level: string;
@@ -58,7 +58,7 @@ export function StudentTodayClient({ previewOnly, userName, plan, rankProfile }:
         fetch("/api/rank/leaderboard"),
         fetch("/api/exam/attempts"),
       ];
-      if (plan === "TOP10") {
+      if (isTopRankPlan(plan)) {
         promises.push(fetch("/api/students/toprank/vision"));
       }
       const [pRes, rRes, aRes, vRes] = await Promise.all(promises);
@@ -74,7 +74,7 @@ export function StudentTodayClient({ previewOnly, userName, plan, rankProfile }:
       const aData = await aRes.json().catch(() => ({}));
       if (aRes.ok && Array.isArray(aData.attempts)) setAttempts(aData.attempts as AttemptRow[]);
 
-      if (plan === "TOP10" && vRes) {
+      if (isTopRankPlan(plan) && vRes) {
         const vData = await vRes.json().catch(() => ({}));
         if (vRes.ok && vData.topRank && vData.vision) {
           setTopVision(vData.vision as TopRankVisionDto);
@@ -137,7 +137,7 @@ export function StudentTodayClient({ previewOnly, userName, plan, rankProfile }:
     if (previewOnly) return "Unlock Pro or TopRank for Nexa coaching wired to your exam memory.";
     return (
       rankPred?.headline ??
-      (plan === "TOP10"
+      (isTopRankPlan(plan)
         ? "Open Nexa Trainer — use your latest debrief to plan the next rep."
         : "Open Nexa — ask for a tight plan on your weakest topic today.")
     );
@@ -224,7 +224,7 @@ export function StudentTodayClient({ previewOnly, userName, plan, rankProfile }:
         </section>
       ) : null}
 
-      {plan === "TOP10" && topVision !== false ? (
+      {isTopRankPlan(plan) && topVision !== false ? (
         topVision ? (
           <TopRankVisionStrip vision={topVision} />
         ) : (
@@ -247,7 +247,7 @@ export function StudentTodayClient({ previewOnly, userName, plan, rankProfile }:
           >
             Start training
           </Link>
-          {plan === "TOP10" ? (
+          {isTopRankPlan(plan) ? (
             <Link
               href="/student/toprank"
               className="inline-flex w-full items-center justify-center rounded-xl border border-violet-500/40 py-2.5 text-xs font-semibold text-violet-200"

@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
-import type { NexaCapability, NexaMode, SubscriptionPlan } from "@prisma/client";
+import type { NexaCapability, NexaMode } from "@prisma/client";
 import { getCurrentSession } from "@/lib/auth";
 import {
   assertWithinDailyTokenBudget,
@@ -17,40 +17,30 @@ import {
   deductAiCredits,
   PAID_DAILY_AI_CAP,
   refundAiCredits,
-  TOP10_DAILY_AI_CAP,
+  TOPRANK_DAILY_AI_CAP,
   applyPlanExpiry,
 } from "@/lib/billing";
 import { logAi } from "@/lib/logger";
 import { buildProSupportMemoryLine } from "@/lib/nexa-pro-context";
 import { buildNexaSystemPrompt, studentPersonaFromPlan } from "@/lib/nexa-personas";
-import type { SessionPayload } from "@/lib/session-payload";
+import { isTopRankPlan } from "@/lib/plan-tier";
 
 export const runtime = "nodejs";
 
 type RequestBody = {
   conversationId?: string;
   content: string;
-  mode?: NexaMode;
   capability?: NexaCapability | string;
   className?: string;
   subject?: string;
   level?: string;
 };
 
-const TEACHER_CAPABILITIES: NexaCapability[] = ["LESSON_PLANNING", "CONTENT_CREATION", "NOTES_GENERATION"];
 const STUDENT_CAPABILITIES: NexaCapability[] = ["DOUBT_SOLVING", "CONCEPT_TEACHING", "EXAM_TIPS", "NOTES_GENERATION"];
 
-function resolveMode(bodyMode: string | undefined, session: SessionPayload): NexaMode {
-  const want = bodyMode === "TEACHER" ? "TEACHER" : bodyMode === "STUDENT" ? "STUDENT" : null;
-  if (want === "TEACHER" && session.roles.includes("TEACHER")) return "TEACHER";
-  if (want === "STUDENT" && session.roles.includes("STUDENT")) return "STUDENT";
-  return session.activeRole;
-}
-
-function normalizeCapability(mode: NexaMode, raw: string | undefined): NexaCapability {
-  const allowed = mode === "TEACHER" ? TEACHER_CAPABILITIES : STUDENT_CAPABILITIES;
-  if (raw && (allowed as string[]).includes(raw)) return raw as NexaCapability;
-  return mode === "TEACHER" ? "LESSON_PLANNING" : "DOUBT_SOLVING";
+function normalizeCapability(raw: string | undefined): NexaCapability {
+  if (raw && (STUDENT_CAPABILITIES as string[]).includes(raw)) return raw as NexaCapability;
+  return "DOUBT_SOLVING";
 }
 
 const capabilityGuide: Record<NexaCapability, string> = {
@@ -91,8 +81,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Message content is required.", code: "VALIDATION" }, { status: 400 });
   }
 
-  const mode = resolveMode(body.mode, session);
-  const capability = normalizeCapability(mode, body.capability);
+  const mode: NexaMode = "STUDENT";
+  const capability = normalizeCapability(body.capability);
 
   await applyPlanExpiry(session.userId);
   const user = await prisma.user.findUnique({
@@ -116,12 +106,12 @@ export async function POST(request: Request) {
     );
   }
 
-  const plan = user.plan as SubscriptionPlan;
+  const plan = user.plan;
 
-  if (mode === "STUDENT" && plan === "BASIC") {
+  if (plan === "BASIC") {
     logAi("nexa_blocked", { userId: session.userId, reason: "BASIC_STUDENT" });
     return NextResponse.json(
-      { error: "Nexa AI is not available on Starter. Upgrade to Pro or TopRank.", code: "PLAN" },
+      { error: "Nexa AI is not available on Starter. Upgrade to Pro, Elite, or TopRank.", code: "PLAN" },
       { status: 403 },
     );
   }
@@ -137,14 +127,7 @@ export async function POST(request: Request) {
   let deductCredits = false;
   let dailyCap = PAID_DAILY_AI_CAP;
 
-  if (mode === "TEACHER") {
-    if (plan === "BASIC") {
-      logAi("nexa_blocked", { userId: session.userId, reason: "BASIC_TEACHER" });
-      return NextResponse.json(
-        { error: "Nexa AI is not available on Starter for teachers. Upgrade to Pro or TopRank.", code: "PLAN" },
-        { status: 403 },
-      );
-    }
+  if (plan === "PRO" || plan === "ELITE") {
     const gate = await assertCanUseAi(session.userId);
     if (!gate.ok) {
       logAi("nexa_blocked", { userId: session.userId, reason: gate.code });
@@ -153,29 +136,12 @@ export async function POST(request: Request) {
         { status: gate.code === "CREDITS" ? 402 : 403 },
       );
     }
-    if (gate.tier === "TOP10") {
-      dailyCap = TOP10_DAILY_AI_CAP;
-      deductCredits = false;
-    } else {
-      deductCredits = true;
-    }
+    deductCredits = true;
+  } else if (isTopRankPlan(plan)) {
+    dailyCap = TOPRANK_DAILY_AI_CAP;
+    deductCredits = false;
   } else {
-    if (plan === "PRO") {
-      const gate = await assertCanUseAi(session.userId);
-      if (!gate.ok) {
-        logAi("nexa_blocked", { userId: session.userId, reason: gate.code });
-        return NextResponse.json(
-          { error: gate.error, code: gate.code },
-          { status: gate.code === "CREDITS" ? 402 : 403 },
-        );
-      }
-      deductCredits = true;
-    } else if (plan === "TOP10") {
-      dailyCap = TOP10_DAILY_AI_CAP;
-      deductCredits = false;
-    } else {
-      return NextResponse.json({ error: "Invalid plan for Nexa.", code: "PLAN" }, { status: 403 });
-    }
+    return NextResponse.json({ error: "Invalid plan for Nexa.", code: "PLAN" }, { status: 403 });
   }
 
   if (priorRequests >= dailyCap) {
@@ -189,30 +155,23 @@ export async function POST(request: Request) {
       name: true,
       nexaStudentLevel: true,
       nexaStudentSubject: true,
-      nexaTeacherSubject: true,
     },
   });
 
-  const trainerMem =
-    mode === "STUDENT" && plan === "TOP10"
-      ? await prisma.nexaStudentMemory.findUnique({ where: { userId: session.userId } })
-      : null;
+  const trainerMem = isTopRankPlan(plan)
+    ? await prisma.nexaStudentMemory.findUnique({ where: { userId: session.userId } })
+    : null;
 
-  const trainerMemoryLine =
-    mode === "STUDENT" && plan === "TOP10"
-      ? trainerMem
-        ? `TopRank performance file (mandatory; quote rank readiness as ${trainerMem.rankReadiness}/100): Weak topics to attack: ${trainerMem.weakTopics.length ? trainerMem.weakTopics.slice(0, 8).join("; ") : "none logged yet"}. Exams logged: ${trainerMem.examCount}. Last exam accuracy: ${trainerMem.lastAccuracyPct != null ? `${trainerMem.lastAccuracyPct.toFixed(1)}%` : "n/a"}. If accuracy is low or weak topics are many, use strict language (e.g. not ready / retry / speed issue).`
-        : "Performance file empty — no exam memory yet. Tell them to complete a timed attempt now; no casual coaching until there is data."
-      : undefined;
+  const trainerMemoryLine = isTopRankPlan(plan)
+    ? trainerMem
+      ? `TopRank performance file (mandatory; quote rank readiness as ${trainerMem.rankReadiness}/100): Weak topics to attack: ${trainerMem.weakTopics.length ? trainerMem.weakTopics.slice(0, 8).join("; ") : "none logged yet"}. Exams logged: ${trainerMem.examCount}. Last exam accuracy: ${trainerMem.lastAccuracyPct != null ? `${trainerMem.lastAccuracyPct.toFixed(1)}%` : "n/a"}. If accuracy is low or weak topics are many, use strict language (e.g. not ready / retry / speed issue).`
+      : "Performance file empty — no exam memory yet. Tell them to complete a timed attempt now; no casual coaching until there is data."
+    : undefined;
 
   const proSupportMemoryLine =
-    mode === "STUDENT" && plan === "PRO" ? await buildProSupportMemoryLine(session.userId) : undefined;
+    plan === "PRO" || plan === "ELITE" ? await buildProSupportMemoryLine(session.userId) : undefined;
 
-  const subjectForPrompt =
-    mode === "STUDENT"
-      ? (body.subject?.trim() || userRow?.nexaStudentSubject || "General")
-      : (body.subject?.trim() || userRow?.nexaTeacherSubject || "General");
-
+  const subjectForPrompt = body.subject?.trim() || userRow?.nexaStudentSubject || "General";
   const levelForPrompt = body.level?.trim() || userRow?.nexaStudentLevel || "Not specified";
   const className = body.className?.trim() || "—";
 
@@ -267,16 +226,13 @@ export async function POST(request: Request) {
   });
   history.reverse();
 
-  const subjectLine =
-    mode === "STUDENT"
-      ? `Context — subject: ${subjectForPrompt}; level/grade: ${levelForPrompt}; class/section: ${className}. Tailor explanations to this level.`
-      : `Context — teaching subject: ${subjectForPrompt}; class/section: ${className}. Tailor materials for educators.`;
+  const subjectLine = `Context — subject: ${subjectForPrompt}; level/grade: ${levelForPrompt}; class/section: ${className}. Tailor explanations to this level.`;
 
   const systemContent = buildNexaSystemPrompt({
     mode,
     capability,
     capabilityGuide,
-    activeRole: session.activeRole,
+    activeRole: "STUDENT",
     userName: userRow?.name ?? "User",
     subjectLine,
     chatTopicsLine,
@@ -297,7 +253,7 @@ export async function POST(request: Request) {
     messagesForOpenAi.map((m) => ({ content: typeof m.content === "string" ? m.content : "" })),
   );
 
-  if (plan === "PRO" || plan === "TOP10") {
+  if (plan === "PRO" || plan === "ELITE" || isTopRankPlan(plan)) {
     const tokenGate = assertWithinDailyTokenBudget({
       plan,
       priorPromptTokens: priorPrompt,
@@ -345,7 +301,7 @@ export async function POST(request: Request) {
     capability,
     mode,
     plan,
-    persona: mode === "STUDENT" ? studentPersonaFromPlan(plan) : "teacher",
+    persona: studentPersonaFromPlan(plan),
   });
 
   const env = getOpenAiEnv();

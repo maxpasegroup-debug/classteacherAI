@@ -1,6 +1,5 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
-import type { SubscriptionPlan } from "@prisma/client";
 import {
   assertWithinDailyTokenBudget,
   estimateTokensFromText,
@@ -46,7 +45,7 @@ function promptFor(kind: Body["kind"], topic: string, subject: string, level: st
 
 export async function POST(request: Request) {
   const session = await getCurrentSession();
-  if (!session || session.activeRole !== "TEACHER") {
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized.", code: "UNAUTHORIZED" }, { status: 401 });
   }
 
@@ -67,7 +66,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const plan = gate.user.plan as SubscriptionPlan;
+  const plan = gate.user.plan;
   const day = getDayStart();
   const usageRow = await prisma.usageStat.findUnique({
     where: { userId_day: { userId: session.userId, day } },
@@ -106,7 +105,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const deductCredits = gate.tier === "PRO";
+  const deductCredits = gate.tier === "PRO" || gate.tier === "ELITE";
 
   if (deductCredits) {
     const deducted = await deductAiCredits(session.userId, AI_REQUEST_CREDIT_COST);

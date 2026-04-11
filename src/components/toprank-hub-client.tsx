@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { SubscriptionPlan } from "@prisma/client";
+import { isTopRankPlan } from "@/lib/plan-tier";
 import { FormEvent, useCallback, useState } from "react";
 import { TopRankAchieversBoard } from "@/components/toprank-achievers-board";
 import { TOPRANK_EXAM_TRACKS } from "@/lib/toprank-vision";
@@ -18,7 +18,7 @@ export type TopRankVisionDto = {
 };
 
 type Props = {
-  plan: SubscriptionPlan;
+  plan: string;
   paidTopRank: boolean;
   initialVision: TopRankVisionDto | null;
 };
@@ -36,7 +36,7 @@ export function TopRankHubClient({ plan, paidTopRank, initialVision }: Props) {
   const [error, setError] = useState("");
   const [checkSaving, setCheckSaving] = useState(false);
 
-  const eligible = plan === "TOP10" && paidTopRank;
+  const eligible = isTopRankPlan(plan) && paidTopRank;
 
   const patchChecklist = useCallback(async (patch: Partial<Pick<TopRankVisionDto, "envStudyTable" | "envDistractionFree" | "envDailySchedule">>) => {
     if (!vision) return;
@@ -86,7 +86,7 @@ export function TopRankHubClient({ plan, paidTopRank, initialVision }: Props) {
     }
   }
 
-  if (!paidTopRank || plan !== "TOP10") {
+  if (!paidTopRank || !isTopRankPlan(plan)) {
     return (
       <div className="space-y-4">
         <header className="space-y-1">

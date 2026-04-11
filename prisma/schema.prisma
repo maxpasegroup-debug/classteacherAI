@@ -13,11 +13,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum UserRole {
-  TEACHER
-  STUDENT
-}
-
 enum NexaMode {
   TEACHER
   STUDENT
@@ -35,17 +30,6 @@ enum NexaCapability {
 enum ChatMessageRole {
   USER
   ASSISTANT
-}
-
-enum SubscriptionPlan {
-  BASIC
-  PRO
-  TOP10
-}
-
-enum SubscriptionStatus {
-  ACTIVE
-  EXPIRED
 }
 
 enum TransactionType {
@@ -72,25 +56,20 @@ enum ExamType {
 }
 
 model User {
-  id             String             @id @default(cuid())
-  name           String
-  email          String             @unique
-  password       String
-  roles          UserRole[]           @default([])
-  plan           SubscriptionPlan   @default(BASIC)
-  subscriptionStatus SubscriptionStatus @default(ACTIVE)
-  /// Current subscription period end (trial end for BASIC, billing period end for paid tiers).
-  subscriptionExpiry DateTime?
-  /// AI / product credits (Nexa, sessions, etc.).
-  credits        Int                @default(0)
-  /// Optional Nexa context (student): grade/class level, e.g. "Grade 9", "Class 12"
-  nexaStudentLevel   String?
-  /// Primary subject the student is studying in Nexa
-  nexaStudentSubject String?
-  /// Primary subject the teacher teaches (Nexa context)
-  nexaTeacherSubject String?
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
+  id                   String    @id @default(cuid())
+  name                 String
+  email                String    @unique
+  password             String
+  /// BASIC | PRO | ELITE | TOPRANK
+  plan                 String    @default("BASIC")
+  /// ACTIVE | INACTIVE
+  subscriptionStatus   String    @default("INACTIVE")
+  subscriptionExpiry   DateTime?
+  credits              Int       @default(0)
+  nexaStudentLevel     String?
+  nexaStudentSubject   String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
   passwordResets PasswordResetOtp[]
   conversations  Conversation[]
   transactions   Transaction[]
@@ -280,7 +259,7 @@ model Transaction {
   type              TransactionType
   amount            Int
   status            TransactionStatus @default(CREATED)
-  plan              SubscriptionPlan?
+  plan              String?
   creditsPurchased  Int?
   razorpayOrderId   String?           @unique
   razorpayPaymentId String?           @unique

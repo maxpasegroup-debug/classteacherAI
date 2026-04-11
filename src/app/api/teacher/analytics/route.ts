@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 
 export async function GET() {
   const session = await getCurrentSession();
-  if (!session || session.activeRole !== "TEACHER") {
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 

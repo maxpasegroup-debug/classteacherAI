@@ -1,5 +1,5 @@
-import type { SubscriptionPlan } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { isTopRankPlan } from "@/lib/plan-tier";
 
 /** Rough tokenizer: ~4 chars per token for English-ish text (conservative for budgeting). */
 export const ESTIMATED_CHARS_PER_TOKEN = 4;
@@ -7,11 +7,14 @@ export const ESTIMATED_CHARS_PER_TOKEN = 4;
 /** Reserve for model output before a streamed request (fail-safe pre-check). */
 export const STREAM_OUTPUT_RESERVE_TOKENS = 12_000;
 
-/** PRO: hard daily token ceiling (prompt + completion), UTC day — paired with credits. */
+/** PRO / ELITE: hard daily token ceiling (prompt + completion), UTC day — paired with credits. */
 export const PRO_DAILY_TOKEN_CAP = 250_000;
 
-/** TOP10: high allowance but bounded to prevent runaway cost. */
-export const TOP10_DAILY_TOKEN_CAP = 2_000_000;
+/** TopRank: high allowance but bounded to prevent runaway cost. */
+export const TOPRANK_DAILY_TOKEN_CAP = 2_000_000;
+
+/** @deprecated use TOPRANK_DAILY_TOKEN_CAP */
+export const TOP10_DAILY_TOKEN_CAP = TOPRANK_DAILY_TOKEN_CAP;
 
 export function estimateTokensFromText(text: string): number {
   if (!text.length) return 0;
@@ -22,9 +25,9 @@ export function estimateTokensFromMessages(messages: { content: string }[]): num
   return messages.reduce((sum, m) => sum + estimateTokensFromText(m.content), 0);
 }
 
-export function dailyTokenCapForPlan(plan: SubscriptionPlan): number {
-  if (plan === "PRO") return PRO_DAILY_TOKEN_CAP;
-  if (plan === "TOP10") return TOP10_DAILY_TOKEN_CAP;
+export function dailyTokenCapForPlan(plan: string): number {
+  if (plan === "PRO" || plan === "ELITE") return PRO_DAILY_TOKEN_CAP;
+  if (isTopRankPlan(plan)) return TOPRANK_DAILY_TOKEN_CAP;
   return 0;
 }
 
@@ -37,7 +40,7 @@ export type TokenBudgetFailure =
  * would exceed the plan's daily token cap. BASIC has no AI tokens (cap 0).
  */
 export function assertWithinDailyTokenBudget(params: {
-  plan: SubscriptionPlan;
+  plan: string;
   priorPromptTokens: number;
   priorCompletionTokens: number;
   estimatedPromptTokens: number;

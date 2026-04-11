@@ -11,8 +11,15 @@ function isAdminEmail(email: string) {
 
 export async function GET() {
   const session = await getCurrentSession();
-  if (!session || !isAdminEmail(session.email)) {
-    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  if (!session) {
+    return NextResponse.json({ success: false, message: "Unauthorized." }, { status: 401 });
+  }
+  const adminUser = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { email: true },
+  });
+  if (!adminUser || !isAdminEmail(adminUser.email)) {
+    return NextResponse.json({ success: false, message: "Unauthorized." }, { status: 401 });
   }
 
   const [users, payments, conversations, bookings] = await Promise.all([

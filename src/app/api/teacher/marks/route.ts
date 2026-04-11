@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   const session = await getCurrentSession();
-  if (!session || session.activeRole !== "TEACHER") {
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized.", code: "UNAUTHORIZED" }, { status: 401 });
   }
 
@@ -34,7 +34,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const session = await getCurrentSession();
-  if (!session || session.activeRole !== "TEACHER") {
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized.", code: "UNAUTHORIZED" }, { status: 401 });
   }
 

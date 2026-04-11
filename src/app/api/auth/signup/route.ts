@@ -3,7 +3,6 @@ import { authJsonError } from "@/lib/auth-responses";
 import { hashPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
 import { signupStudentSchema } from "@/lib/validators";
-import { toSessionPayload } from "@/lib/session-payload";
 
 export const runtime = "nodejs";
 
@@ -20,7 +19,6 @@ export async function POST(req: Request) {
     }
 
     const { name, email, password } = parsed.data;
-    console.log("SIGNUP:", email);
 
     const existingUser = await prisma.user.findUnique({
       where: { email },
@@ -38,9 +36,8 @@ export async function POST(req: Request) {
         name: name.trim(),
         email,
         password: hashedPassword,
-        roles: ["STUDENT"],
         plan: "BASIC",
-        subscriptionStatus: "EXPIRED",
+        subscriptionStatus: "INACTIVE",
         subscriptionExpiry: null,
         credits: 0,
       },
@@ -48,13 +45,10 @@ export async function POST(req: Request) {
         id: true,
         name: true,
         email: true,
-        roles: true,
-        plan: true,
       },
     });
 
-    const payload = toSessionPayload(user, "STUDENT");
-    const token = signSessionToken(payload);
+    const token = signSessionToken({ userId: user.id });
     await setSessionCookie(token);
 
     return Response.json({
@@ -67,7 +61,7 @@ export async function POST(req: Request) {
       redirectTo: "/onboarding",
     });
   } catch (error) {
-    console.error("SIGNUP ERROR:", error);
+    console.error("AUTH ERROR:", error);
     return authJsonError("Something went wrong. Please try again.", 500);
   }
 }

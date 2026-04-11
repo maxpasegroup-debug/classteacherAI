@@ -15,6 +15,7 @@ import {
   utcDayStart,
   type TrainingModeApi,
 } from "@/lib/top10-training-engine";
+import { isTopRankPlan } from "@/lib/plan-tier";
 
 export const runtime = "nodejs";
 
@@ -32,14 +33,14 @@ async function getOrCreateTop10State(userId: string) {
 
 export async function POST(request: Request) {
   const session = await getCurrentSession();
-  if (!session || session.activeRole !== "STUDENT") {
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized.", code: "UNAUTHORIZED" }, { status: 401 });
   }
 
   const body = (await request.json().catch(() => null)) as {
     examId?: string;
     trainingMode?: TrainingModeApi;
-    /** Optional keyword — questions whose text contains it (topic drill). */
+    /** Optional keyword â€” questions whose text contains it (topic drill). */
     topicFocus?: string | null;
     /** Sample across easy / medium / hard levels. */
     mixedDifficulty?: boolean;
@@ -262,7 +263,7 @@ export async function POST(request: Request) {
     deadlineAt,
     durationSec,
     questions: questions.map((q) => ({ id: q.id, question: q.question, options: q.options })),
-    trainingMeta: modeUpper ? { trainingMode, difficulty: gate.user.plan === "TOP10" ? 3 : 2 } : undefined,
+    trainingMeta: modeUpper ? { trainingMode, difficulty: isTopRankPlan(gate.user.plan) ? 3 : 2 } : undefined,
     sessionMeta: {
       timed: true,
       autoEval: true,

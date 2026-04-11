@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 
 export async function GET() {
   const session = await getCurrentSession();
-  if (!session || session.activeRole !== "STUDENT") {
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
   const active = await requireActiveStudentPlan(session.userId);
@@ -20,7 +20,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const session = await getCurrentSession();
-  if (!session || session.activeRole !== "STUDENT") {
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
   const gate = await requireStudentFeature(session.userId, "skills_progress_write");

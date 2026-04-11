@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getCurrentSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { isTopRankPlan } from "@/lib/plan-tier";
+import { studentPersonaFromPlan } from "@/lib/nexa-personas";
 
 export const runtime = "nodejs";
 
@@ -16,7 +18,6 @@ export async function GET() {
       plan: true,
       nexaStudentLevel: true,
       nexaStudentSubject: true,
-      nexaTeacherSubject: true,
       credits: true,
     },
   });
@@ -25,29 +26,28 @@ export async function GET() {
     return NextResponse.json({ error: "Not found." }, { status: 404 });
   }
 
-  const trainerMemory =
-    user.plan === "TOP10"
-      ? await prisma.nexaStudentMemory.findUnique({
-          where: { userId: session.userId },
-          select: {
-            rankReadiness: true,
-            weakTopics: true,
-            examCount: true,
-            lastAccuracyPct: true,
-            lastExamAt: true,
-          },
-        })
-      : null;
+  const trainerMemory = isTopRankPlan(user.plan)
+    ? await prisma.nexaStudentMemory.findUnique({
+        where: { userId: session.userId },
+        select: {
+          rankReadiness: true,
+          weakTopics: true,
+          examCount: true,
+          lastAccuracyPct: true,
+          lastExamAt: true,
+        },
+      })
+    : null;
+
+  const persona = studentPersonaFromPlan(user.plan);
 
   return NextResponse.json({
-    activeRole: session.activeRole,
     plan: user.plan,
     credits: user.credits,
     nexaStudentLevel: user.nexaStudentLevel,
     nexaStudentSubject: user.nexaStudentSubject,
-    nexaTeacherSubject: user.nexaTeacherSubject,
     trainerMemory,
-    nexaPersona: user.plan === "TOP10" ? "top10_trainer" : user.plan === "PRO" ? "pro" : "basic",
+    nexaPersona: persona,
   });
 }
 
@@ -60,7 +60,6 @@ export async function PATCH(request: Request) {
   const body = (await request.json().catch(() => null)) as {
     nexaStudentLevel?: string | null;
     nexaStudentSubject?: string | null;
-    nexaTeacherSubject?: string | null;
   } | null;
 
   if (!body) {
@@ -70,7 +69,6 @@ export async function PATCH(request: Request) {
   const data: {
     nexaStudentLevel?: string | null;
     nexaStudentSubject?: string | null;
-    nexaTeacherSubject?: string | null;
   } = {};
 
   if ("nexaStudentLevel" in body) {
@@ -79,9 +77,6 @@ export async function PATCH(request: Request) {
   if ("nexaStudentSubject" in body) {
     data.nexaStudentSubject = body.nexaStudentSubject?.trim() || null;
   }
-  if ("nexaTeacherSubject" in body) {
-    data.nexaTeacherSubject = body.nexaTeacherSubject?.trim() || null;
-  }
 
   const updated = await prisma.user.update({
     where: { id: session.userId },
@@ -89,7 +84,6 @@ export async function PATCH(request: Request) {
     select: {
       nexaStudentLevel: true,
       nexaStudentSubject: true,
-      nexaTeacherSubject: true,
       credits: true,
     },
   });
@@ -98,6 +92,5 @@ export async function PATCH(request: Request) {
     credits: updated.credits,
     nexaStudentLevel: updated.nexaStudentLevel,
     nexaStudentSubject: updated.nexaStudentSubject,
-    nexaTeacherSubject: updated.nexaTeacherSubject,
   });
 }

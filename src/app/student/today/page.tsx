@@ -6,7 +6,7 @@ import { StudentTodayClient } from "@/components/student-today-client";
 
 export default async function StudentTodayPage() {
   const session = await getCurrentSession();
-  if (!session || session.activeRole !== "STUDENT") {
+  if (!session) {
     redirect("/auth/login");
   }
 
@@ -16,7 +16,6 @@ export default async function StudentTodayPage() {
     where: { id: session.userId },
     select: {
       name: true,
-      roles: true,
       plan: true,
       subscriptionStatus: true,
       subscriptionExpiry: true,
@@ -34,9 +33,10 @@ export default async function StudentTodayPage() {
     },
   });
 
-  if (!user?.roles.includes("STUDENT")) {
+  if (!user) {
     redirect("/auth/login");
   }
+
   if (!user.studentProfile?.onboardingCompleted) {
     redirect("/onboarding");
   }

@@ -16,5 +16,11 @@ export default async function OnboardingPage() {
     redirect("/dashboard");
   }
 
-  return <OnboardingChatClient defaultName={session.email.split("@")[0] ?? "Student"} />;
+  const user = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { name: true, email: true },
+  });
+  const defaultName = user?.name?.trim() || user?.email?.split("@")[0] || "Student";
+
+  return <OnboardingChatClient defaultName={defaultName} />;
 }

@@ -19,7 +19,7 @@ function accuracy(score: number, maxScore: number) {
 
 export async function GET() {
   const session = await getCurrentSession();
-  if (!session || session.activeRole !== "STUDENT") {
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized.", code: "UNAUTHORIZED" }, { status: 401 });
   }
 
@@ -101,7 +101,7 @@ export async function GET() {
       rankPrediction: {
         headline: "Start a mock exam to see how you compare.",
         detail: "We estimate peer standing from practice accuracy across all students.",
-        band: "—",
+        band: "â€”",
         percentileBeat: null,
       },
       insights: buildGrowthInsights({

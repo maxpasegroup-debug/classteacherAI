@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   const session = await getCurrentSession();
-  if (!session || session.activeRole !== "STUDENT") {
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 

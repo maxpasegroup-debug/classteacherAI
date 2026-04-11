@@ -7,7 +7,7 @@ import { computeAttemptStats } from "@/lib/student-profile-snapshot";
 
 export default async function StudentProfilePage() {
   const session = await getCurrentSession();
-  if (!session || session.activeRole !== "STUDENT") redirect("/auth/login");
+  if (!session) redirect("/auth/login");
 
   await applyPlanExpiry(session.userId);
 
@@ -19,7 +19,6 @@ export default async function StudentProfilePage() {
       select: {
         name: true,
         email: true,
-        roles: true,
         plan: true,
         credits: true,
         subscriptionStatus: true,
@@ -49,7 +48,7 @@ export default async function StudentProfilePage() {
     }),
   ]);
 
-  if (!user?.roles.includes("STUDENT")) redirect("/auth/login");
+  if (!user) redirect("/auth/login");
 
   const paidActive =
     user.subscriptionStatus === "ACTIVE" &&

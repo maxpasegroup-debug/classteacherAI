@@ -10,7 +10,7 @@ import { StudentEliteNav } from "@/components/student-elite-nav";
 
 export default async function RootcarePage() {
   const session = await getCurrentSession();
-  if (!session || session.activeRole !== "STUDENT") redirect("/auth/login");
+  if (!session) redirect("/auth/login");
 
   const [user, assessments, reports] = await Promise.all([
     prisma.user.findUnique({
@@ -42,17 +42,17 @@ export default async function RootcarePage() {
           <p className="text-xs font-semibold uppercase tracking-wide text-teal-800">RootCare</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">Discover your career path</h1>
           <p className="mt-2 max-w-2xl text-sm text-slate-600">
-            Stay in one ecosystem: short assessment → personalized career suggestions → human counseling when you are
+            Stay in one ecosystem: short assessment â†’ personalized career suggestions â†’ human counseling when you are
             ready. Built to extend practice into long-term direction.
           </p>
           <ol className="mt-4 flex flex-wrap gap-3 text-xs font-medium text-teal-900">
-            <li className="rounded-full bg-white/80 px-3 py-1 ring-1 ring-teal-100">1 · Assessment</li>
-            <li className="rounded-full bg-white/80 px-3 py-1 ring-1 ring-teal-100">2 · Career suggestions</li>
-            <li className="rounded-full bg-white/80 px-3 py-1 ring-1 ring-teal-100">3 · Counseling</li>
+            <li className="rounded-full bg-white/80 px-3 py-1 ring-1 ring-teal-100">1 Â· Assessment</li>
+            <li className="rounded-full bg-white/80 px-3 py-1 ring-1 ring-teal-100">2 Â· Career suggestions</li>
+            <li className="rounded-full bg-white/80 px-3 py-1 ring-1 ring-teal-100">3 Â· Counseling</li>
           </ol>
           <div className="mt-4 flex flex-wrap gap-3 text-sm">
             <Link href="/student/today" className="font-medium text-teal-700 hover:text-teal-900">
-              ← Today
+              â† Today
             </Link>
             <Link href="/student/exams" className="font-medium text-slate-600 hover:text-slate-900">
               Exams
@@ -65,7 +65,7 @@ export default async function RootcarePage() {
 
         <div className="grid gap-4 lg:grid-cols-2">
           <CardUI
-            title="Step 1 — Assessment"
+            title="Step 1 â€” Assessment"
             description="Five quick sliders (no timer). Saves a snapshot used for your career map."
           >
             <RootcareAssessmentForm />
@@ -77,8 +77,8 @@ export default async function RootcarePage() {
           </CardUI>
 
           <CardUI
-            title="Step 2 — Career suggestions"
-            description="Generate a report from your latest assessment — strengths and suggested career clusters."
+            title="Step 2 â€” Career suggestions"
+            description="Generate a report from your latest assessment â€” strengths and suggested career clusters."
           >
             <RootcareCareerReportButton />
             {reports.length > 0 ? (
@@ -91,7 +91,7 @@ export default async function RootcarePage() {
                     <p className="mt-1 font-medium text-slate-900">{r.summary}</p>
                     {r.strengths.length > 0 ? (
                       <p className="mt-2 text-xs text-slate-600">
-                        <span className="font-semibold text-slate-800">Strengths:</span> {r.strengths.join(" · ")}
+                        <span className="font-semibold text-slate-800">Strengths:</span> {r.strengths.join(" Â· ")}
                       </p>
                     ) : null}
                     {r.careerSuggestions.length > 0 ? (
@@ -119,7 +119,7 @@ export default async function RootcarePage() {
           <p className="text-[10px] font-semibold uppercase tracking-widest text-teal-100/90">Step 3</p>
           <h2 className="mt-1 text-lg font-semibold">Counseling & long-term guidance</h2>
           <p className="mt-2 max-w-xl text-sm text-teal-50/95">
-            Talk through your map with a human — request study help, teacher match, or next-step planning. Pro and TOP10
+            Talk through your map with a human â€” request study help, teacher match, or next-step planning. Pro and TOP10
             include deeper touchpoints; everyone can start from Help.
           </p>
           <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
@@ -172,7 +172,7 @@ export default async function RootcarePage() {
               <Link href="/skills" className="text-teal-700 underline">
                 Continue learning in the same app
               </Link>
-              {!advanced ? <span className="text-slate-500"> — upgrade for picks tied to your report.</span> : null}
+              {!advanced ? <span className="text-slate-500"> â€” upgrade for picks tied to your report.</span> : null}
             </li>
           </ul>
         </CardUI>

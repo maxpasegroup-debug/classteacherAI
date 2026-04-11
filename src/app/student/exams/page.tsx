@@ -5,7 +5,7 @@ import { StudentExamsClient } from "@/components/student-exams-client";
 
 export default async function StudentExamsPage() {
   const session = await getCurrentSession();
-  if (!session || session.activeRole !== "STUDENT") redirect("/auth/login");
+  if (!session) redirect("/auth/login");
 
   const [exams, user] = await Promise.all([
     prisma.exam.findMany({ orderBy: { createdAt: "desc" }, take: 20 }),
@@ -21,7 +21,7 @@ export default async function StudentExamsPage() {
         <header className="space-y-1">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Training</p>
           <h1 className="font-training-display text-3xl text-slate-900">Exam Engine</h1>
-          <p className="text-sm text-training-muted">Focused practice — clean runs, clear outcomes.</p>
+          <p className="text-sm text-training-muted">Focused practice â€” clean runs, clear outcomes.</p>
         </header>
         <StudentExamsClient exams={exams} plan={user?.plan ?? "BASIC"} />
       </section>

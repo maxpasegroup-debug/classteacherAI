@@ -4,13 +4,14 @@ import { prisma } from "@/lib/prisma";
 import { updateNexaStudentMemoryAfterExam, type TrainerDebrief } from "@/lib/nexa-trainer-memory";
 import { recordPerformanceAttemptMetrics } from "@/lib/performance-tracking";
 import { adaptiveDifficulty, PASS_THRESHOLD_PCT } from "@/lib/top10-training-engine";
+import { isTopRankPlan } from "@/lib/plan-tier";
 
 export const runtime = "nodejs";
 const EXAM_SUBMIT_GRACE_SECONDS = 10;
 
 export async function POST(request: Request) {
   const session = await getCurrentSession();
-  if (!session || session.activeRole !== "STUDENT") {
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized.", code: "UNAUTHORIZED" }, { status: 401 });
   }
 
@@ -76,7 +77,7 @@ export async function POST(request: Request) {
   let top10: Record<string, unknown> | undefined;
   let trainerDebrief: TrainerDebrief | undefined;
 
-  if (profile?.plan === "TOP10") {
+  if (profile?.plan && isTopRankPlan(profile.plan)) {
     trainerDebrief = await updateNexaStudentMemoryAfterExam(session.userId, {
       examId: exam.id,
       subject: exam.subject,
@@ -107,8 +108,8 @@ export async function POST(request: Request) {
       wrongIds.length > 0
         ? [`${exam.subject} (${wrongIds.length} missed)`]
         : passed
-          ? ["Solid round — difficulty will adapt up."]
-          : ["Time or accuracy below bar — tighten fundamentals."];
+          ? ["Solid round â€” difficulty will adapt up."]
+          : ["Time or accuracy below bar â€” tighten fundamentals."];
 
     await prisma.top10TrainingState.upsert({
       where: { userId: session.userId },
@@ -149,7 +150,7 @@ export async function POST(request: Request) {
       passed,
       phase: "RESULT",
       campMessage: mustRetry
-        ? "Below camp standard. Mandatory retry — no skipping ahead."
+        ? "Below camp standard. Mandatory retry â€” no skipping ahead."
         : "Round cleared. Continue to analysis, then drill, then re-test.",
     };
   }
@@ -157,14 +158,14 @@ export async function POST(request: Request) {
   let weakAreas: string[] = [];
   if (isTimeExceeded) {
     weakAreas = [
-      "Time: you exceeded the allowed window — pacing, skip strategy, and clock discipline need work.",
+      "Time: you exceeded the allowed window â€” pacing, skip strategy, and clock discipline need work.",
     ];
   } else if (wrongIds.length === 0) {
-    weakAreas = ["No missed items this round — retention on these items looks solid."];
+    weakAreas = ["No missed items this round â€” retention on these items looks solid."];
   } else {
     const wrongQs = await prisma.questionBank.findMany({ where: { id: { in: wrongIds } } });
     if (wrongQs.length === 0) {
-      weakAreas = [`Missed ${wrongIds.length} item(s) — review explanations and rework similar items.`];
+      weakAreas = [`Missed ${wrongIds.length} item(s) â€” review explanations and rework similar items.`];
     } else {
       const byLevel = new Map<string, number>();
       for (const q of wrongQs) {
@@ -172,7 +173,7 @@ export async function POST(request: Request) {
       }
       weakAreas = [...byLevel.entries()]
         .sort((a, b) => b[1] - a[1])
-        .map(([level, n]) => `${exam.subject} · Level ${level}: ${n} missed`);
+        .map(([level, n]) => `${exam.subject} Â· Level ${level}: ${n} missed`);
     }
   }
 
@@ -189,14 +190,14 @@ export async function POST(request: Request) {
         title: pickedAlt.title,
         subject: pickedAlt.subject,
         durationMin: pickedAlt.durationMin,
-        reason: `More ${exam.subject} coverage — suggested paper based on weak-area signals from this round.`,
+        reason: `More ${exam.subject} coverage â€” suggested paper based on weak-area signals from this round.`,
       }
     : {
         id: exam.id,
         title: exam.title,
         subject: exam.subject,
         durationMin: exam.durationMin,
-        reason: "Repeat this paper until accuracy stabilizes — no dead ends.",
+        reason: "Repeat this paper until accuracy stabilizes â€” no dead ends.",
       };
 
   const trainingLoop = {

@@ -1,6 +1,6 @@
-import type { SubscriptionPlan } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { applyPlanExpiry } from "@/lib/billing";
+import { isTopRankPlan } from "@/lib/plan-tier";
 
 /** Student-dashboard feature gates (enforced in API routes). */
 export type StudentFeature =
@@ -11,9 +11,9 @@ export type StudentFeature =
   | "performance_full"
   | "top10_training";
 
-export function planAllowsFeature(plan: SubscriptionPlan, feature: StudentFeature): boolean {
-  if (plan === "TOP10") return true;
-  if (plan === "PRO") {
+export function planAllowsFeature(plan: string, feature: StudentFeature): boolean {
+  if (isTopRankPlan(plan)) return true;
+  if (plan === "PRO" || plan === "ELITE") {
     return feature !== "top10_training";
   }
   if (plan === "BASIC") {

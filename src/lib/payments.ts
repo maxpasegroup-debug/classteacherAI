@@ -3,7 +3,13 @@ import Razorpay from "razorpay";
 import { getRazorpayEnv } from "@/lib/env";
 import { CREDIT_TOP_UP_PACKS, PLANS } from "@/lib/pricing";
 
-export type PurchaseKind = "BASIC_MONTHLY" | "PRO" | "TOP10" | "CREDITS_SMALL" | "CREDITS_LARGE";
+export type PurchaseKind =
+  | "BASIC_MONTHLY"
+  | "PRO"
+  | "ELITE"
+  | "TOPRANK"
+  | "CREDITS_SMALL"
+  | "CREDITS_LARGE";
 
 export const SUBSCRIPTION_PLANS = {
   BASIC_MONTHLY: {
@@ -12,7 +18,8 @@ export const SUBSCRIPTION_PLANS = {
     dbPlan: "BASIC" as const,
   },
   PRO: { name: PLANS.PRO.name, amountInr: PLANS.PRO.priceInr, dbPlan: "PRO" as const },
-  TOP10: { name: PLANS.TOP10.name, amountInr: PLANS.TOP10.priceInr, dbPlan: "TOP10" as const },
+  ELITE: { name: PLANS.ELITE.name, amountInr: PLANS.ELITE.priceInr, dbPlan: "ELITE" as const },
+  TOPRANK: { name: PLANS.TOPRANK.name, amountInr: PLANS.TOPRANK.priceInr, dbPlan: "TOPRANK" as const },
 };
 
 export const CREDIT_PACKS = {

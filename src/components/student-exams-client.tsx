@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { SubscriptionPlan } from "@prisma/client";
+import { isTopRankPlan } from "@/lib/plan-tier";
 import { CardUI } from "@/components/card-ui";
 import { ExamTakingView, type ExamAttemptPayload } from "@/components/exam-taking-view";
 import { RootCareFunnelNudge } from "@/components/rootcare-funnel-nudge";
@@ -65,7 +65,7 @@ type TrainingModeChoice = "select" | "practice" | "advanced" | "top10";
 
 type Props = {
   exams: ExamItem[];
-  plan: SubscriptionPlan;
+  plan: string;
 };
 
 export function StudentExamsClient({ exams, plan }: Props) {
@@ -228,8 +228,8 @@ export function StudentExamsClient({ exams, plan }: Props) {
     return `${mins}:${secs}`;
   }
 
-  const showTop10Camp = trainingMode === "top10" && plan === "TOP10";
-  const showTop10Locked = trainingMode === "top10" && plan !== "TOP10";
+  const showTop10Camp = trainingMode === "top10" && isTopRankPlan(plan);
+  const showTop10Locked = trainingMode === "top10" && !isTopRankPlan(plan);
 
   const loop = result?.trainingLoop;
   const continueTrainingTarget = loop?.nextRecommendedExam ?? null;
@@ -295,8 +295,8 @@ export function StudentExamsClient({ exams, plan }: Props) {
               TOP10 <span className="text-amber-700">Elite</span>
             </p>
             <p className="mt-1 text-xs leading-relaxed text-slate-600">Dark camp · streaks · one-tap continue.</p>
-            {plan !== "TOP10" ? (
-              <p className="mt-2 text-[10px] font-medium uppercase tracking-wide text-amber-800/90">TOP10 plan</p>
+            {!isTopRankPlan(plan) ? (
+              <p className="mt-2 text-[10px] font-medium uppercase tracking-wide text-amber-800/90">TopRank plan</p>
             ) : null}
           </button>
         </div>

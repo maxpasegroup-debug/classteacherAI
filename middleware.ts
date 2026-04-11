@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import jwt from "jsonwebtoken";
-import { normalizeSessionPayload, type SessionPayload } from "@/lib/session-payload";
+import { normalizeSessionPayload } from "@/lib/session-payload";
 
 const SESSION_COOKIE = "ctai_session";
 
-function getSession(request: NextRequest): SessionPayload | null {
+function getSessionUserId(request: NextRequest): string | null {
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   if (!token) return null;
   const secret = process.env.JWT_SECRET;
@@ -13,66 +13,24 @@ function getSession(request: NextRequest): SessionPayload | null {
 
   try {
     const decoded = jwt.verify(token, secret);
-    return normalizeSessionPayload(decoded);
+    const payload = normalizeSessionPayload(decoded);
+    return payload?.userId ?? null;
   } catch {
     return null;
   }
 }
 
-function isAdminEmail(email: string) {
-  const list = (process.env.ADMIN_EMAILS ?? "").split(",").map((x) => x.trim()).filter(Boolean);
-  return list.includes(email);
-}
-
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const session = getSession(request);
-  const loggedIn = Boolean(session);
+  const userId = getSessionUserId(request);
+  const loggedIn = Boolean(userId);
   const isApi = pathname.startsWith("/api/");
 
-  function unauthorized() {
+  function unauthorized(message = "Unauthorized.") {
     if (isApi) {
-      return NextResponse.json({ error: "Unauthorized.", code: "UNAUTHORIZED" }, { status: 401 });
+      return NextResponse.json({ success: false, message }, { status: 401 });
     }
     return NextResponse.redirect(new URL("/auth/login", request.url));
-  }
-
-  function forbidden() {
-    if (isApi) {
-      return NextResponse.json({ error: "Forbidden.", code: "FORBIDDEN" }, { status: 403 });
-    }
-    return NextResponse.redirect(new URL("/dashboard", request.url));
-  }
-
-  const onboardingCompleted = Boolean(session?.onboardingCompleted);
-  const publicPaths = pathname === "/" || pathname.startsWith("/auth");
-  const onboardingPath = pathname === "/onboarding";
-  const onboardingApiPath = pathname.startsWith("/api/onboarding");
-  const safeSessionApi = pathname.startsWith("/api/auth/me") || pathname.startsWith("/api/auth/logout");
-
-  if (onboardingPath && !loggedIn) {
-    return NextResponse.redirect(new URL("/auth/login", request.url));
-  }
-
-  if (loggedIn && !onboardingCompleted && !publicPaths && !onboardingPath && !onboardingApiPath && !safeSessionApi) {
-    if (!isApi) {
-      return NextResponse.redirect(new URL("/onboarding", request.url));
-    }
-  }
-
-  if (loggedIn && onboardingPath && onboardingCompleted) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
-  }
-
-  if (pathname.startsWith("/api/nexa")) {
-    if (!loggedIn) return unauthorized();
-    return NextResponse.next();
-  }
-
-  if (pathname.startsWith("/admin") || pathname.startsWith("/api/admin")) {
-    if (!session) return unauthorized();
-    if (!isAdminEmail(session.email)) return forbidden();
-    return NextResponse.next();
   }
 
   if (pathname.startsWith("/teacher")) {
@@ -80,11 +38,16 @@ export function middleware(request: NextRequest) {
   }
 
   if (pathname.startsWith("/api/teacher")) {
-    return NextResponse.json({ error: "Not found." }, { status: 404 });
+    return NextResponse.json({ success: false, message: "Not found." }, { status: 404 });
   }
 
-  if (pathname.startsWith("/api/auth/switch-role") || pathname.startsWith("/api/auth/add-role")) {
-    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  if (pathname.startsWith("/api/admin")) {
+    return NextResponse.json({ success: false, message: "Not found." }, { status: 404 });
+  }
+
+  if (pathname.startsWith("/admin")) {
+    if (!loggedIn) return unauthorized();
+    return NextResponse.redirect(new URL("/student/today", request.url));
   }
 
   if (pathname.startsWith("/api/students/teachers") && request.method === "GET") {
@@ -95,9 +58,13 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  if (pathname.startsWith("/api/nexa")) {
+    if (!loggedIn) return unauthorized();
+    return NextResponse.next();
+  }
+
   if (pathname.startsWith("/api/rank")) {
     if (!loggedIn) return unauthorized();
-    if (session?.activeRole !== "STUDENT") return forbidden();
     return NextResponse.next();
   }
 
@@ -106,15 +73,8 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (pathname.startsWith("/rootcare")) {
+  if (pathname.startsWith("/rootcare") || pathname.startsWith("/api/rootcare")) {
     if (!loggedIn) return unauthorized();
-    if (session?.activeRole !== "STUDENT") return forbidden();
-    return NextResponse.next();
-  }
-
-  if (pathname.startsWith("/api/rootcare")) {
-    if (!loggedIn) return unauthorized();
-    if (session?.activeRole !== "STUDENT") return forbidden();
     return NextResponse.next();
   }
 
@@ -135,13 +95,12 @@ export function middleware(request: NextRequest) {
     pathname.startsWith("/pricing") ||
     pathname.startsWith("/credits");
 
-  if ((isMainAppRoute || pathname.startsWith("/dashboard")) && !loggedIn) {
-    return NextResponse.redirect(new URL("/auth/login", request.url));
+  if ((isMainAppRoute || pathname.startsWith("/dashboard") || pathname === "/onboarding") && !loggedIn) {
+    return unauthorized();
   }
 
   if (pathname.startsWith("/auth") && loggedIn) {
-    const destination = onboardingCompleted ? "/dashboard" : "/onboarding";
-    return NextResponse.redirect(new URL(destination, request.url));
+    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
   return NextResponse.next();
@@ -149,6 +108,7 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    "/admin/:path*",
     "/teacher/:path*",
     "/student/:path*",
     "/admin/:path*",
@@ -160,7 +120,6 @@ export const config = {
     "/api/rootcare/:path*",
     "/api/admin/:path*",
     "/api/nexa/:path*",
-    "/api/onboarding/:path*",
     "/dashboard/:path*",
     "/onboarding/:path*",
     "/today/:path*",

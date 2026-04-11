@@ -1,61 +1,62 @@
 import { NextResponse } from "next/server";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { getCurrentSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
-type Params = { params: Promise<{ id: string }> };
-
-export async function PATCH(request: Request, { params }: Params) {
+export async function POST(request: Request) {
   const session = await getCurrentSession();
-  if (!session || session.activeRole !== "TEACHER") {
-    return NextResponse.json({ error: "Unauthorized.", code: "UNAUTHORIZED" }, { status: 401 });
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  const { id } = await params;
-  const body = (await request.json().catch(() => null)) as {
-    name?: string;
-    email?: string;
-    grade?: string;
-    notes?: string;
-  } | null;
+  const body = (await request.json().catch(() => null)) as { studentId?: string } | null;
+  if (!body?.studentId) {
+    return NextResponse.json({ error: "studentId is required." }, { status: 400 });
+  }
 
-  const existing = await prisma.teacherStudent.findFirst({
-    where: { id, teacherId: session.userId },
+  const student = await prisma.user.findUnique({
+    where: { id: body.studentId },
+    select: { id: true, name: true, email: true },
   });
-  if (!existing) {
-    return NextResponse.json({ error: "Not found.", code: "NOT_FOUND" }, { status: 404 });
+  if (!student) {
+    return NextResponse.json({ error: "Student not found." }, { status: 404 });
   }
 
-  const student = await prisma.teacherStudent.update({
-    where: { id },
-    data: {
-      ...(body?.name !== undefined ? { name: body.name } : {}),
-      ...(body?.email !== undefined ? { email: body.email || null } : {}),
-      ...(body?.grade !== undefined ? { grade: body.grade || null } : {}),
-      ...(body?.notes !== undefined ? { notes: body.notes || null } : {}),
+  const records = await prisma.studentPerformance.findMany({
+    where: { studentId: student.id },
+    orderBy: { createdAt: "desc" },
+    take: 5,
+  });
+
+  const avg = records.length ? records.reduce((a, b) => a + b.score, 0) / records.length : 0;
+  const weakAreas = [...new Set(records.flatMap((item) => item.weakAreas))].slice(0, 8);
+
+  const summary =
+    records.length === 0
+      ? "No performance snapshots on file yet. Log exam or practice results to populate trends."
+      : `Based on ${records.length} recent snapshot(s): average ${avg.toFixed(1)}%. ${
+          weakAreas.length > 0
+            ? `Flagged focus areas: ${weakAreas.join(", ")}. Recommend targeted drills before the next assessment.`
+            : "No weak-area flags in the latest snapshots."
+        }`;
+
+  const pdf = await PDFDocument.create();
+  const page = pdf.addPage([595, 842]);
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  page.drawText("ClassteacherAI - Report card", { x: 50, y: 790, size: 20, font, color: rgb(0.1, 0.1, 0.2) });
+  page.drawText(`Student: ${student.name}`, { x: 50, y: 755, size: 12, font });
+  page.drawText(`Email: ${student.email}`, { x: 50, y: 738, size: 12, font });
+  page.drawText(`Average score: ${avg.toFixed(2)}%`, { x: 50, y: 710, size: 12, font });
+  page.drawText(`Weak areas: ${weakAreas.join(", ") || "None identified"}`, { x: 50, y: 690, size: 12, font });
+  page.drawText(summary, { x: 50, y: 660, size: 11, font, maxWidth: 500, lineHeight: 14 });
+
+  const bytes = await pdf.save();
+  return new Response(Buffer.from(bytes), {
+    headers: {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename=\"report-card-${student.name.replace(/\s+/g, "-")}.pdf\"`,
     },
   });
-
-  return NextResponse.json({ student });
-}
-
-export async function DELETE(_request: Request, { params }: Params) {
-  const session = await getCurrentSession();
-  if (!session || session.activeRole !== "TEACHER") {
-    return NextResponse.json({ error: "Unauthorized.", code: "UNAUTHORIZED" }, { status: 401 });
-  }
-
-  const { id } = await params;
-
-  const existing = await prisma.teacherStudent.findFirst({
-    where: { id, teacherId: session.userId },
-  });
-  if (!existing) {
-    return NextResponse.json({ error: "Not found.", code: "NOT_FOUND" }, { status: 404 });
-  }
-
-  await prisma.teacherStudent.delete({ where: { id } });
-
-  return NextResponse.json({ ok: true });
 }

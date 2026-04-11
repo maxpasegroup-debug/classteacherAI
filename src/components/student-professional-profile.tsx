@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import type { SubscriptionPlan, SubscriptionStatus } from "@prisma/client";
 import { PLANS, subscriptionTierLabel } from "@/lib/pricing";
+import { isTopRankPlan } from "@/lib/plan-tier";
 import { TOPRANK_EXAM_TRACKS } from "@/lib/toprank-vision";
 
 function examTrackLabel(trackId: string) {
@@ -13,9 +13,16 @@ function formatRenewal(d: Date | null) {
   return d.toLocaleDateString(undefined, { dateStyle: "medium" });
 }
 
-function statusLabel(status: SubscriptionStatus, paidActive: boolean) {
-  if (status === "EXPIRED") return "Expired";
-  // ACTIVE — only other Prisma enum value today
+function planDetailsForTier(plan: string) {
+  if (plan === "BASIC") return PLANS.BASIC;
+  if (plan === "PRO") return PLANS.PRO;
+  if (plan === "ELITE") return PLANS.ELITE;
+  if (isTopRankPlan(plan)) return PLANS.TOPRANK;
+  return PLANS.BASIC;
+}
+
+function statusLabel(status: string, paidActive: boolean) {
+  if (status === "INACTIVE") return "Inactive";
   return paidActive ? "Active" : "Preview / limited";
 }
 
@@ -33,8 +40,8 @@ type Props = {
     email: string;
     nexaStudentLevel: string | null;
     nexaStudentSubject: string | null;
-    plan: SubscriptionPlan;
-    subscriptionStatus: SubscriptionStatus;
+    plan: string;
+    subscriptionStatus: string;
     subscriptionExpiry: Date | null;
     credits: number;
     createdAt: Date;
@@ -81,7 +88,7 @@ function Row({ label, value, action }: { label: string; value: ReactNode; action
 
 export function StudentProfessionalProfile({ user, vision, stats, paidActive }: Props) {
   const tier = subscriptionTierLabel(user.plan);
-  const planBlock = PLANS[user.plan];
+  const planBlock = planDetailsForTier(user.plan);
 
   return (
     <div className="space-y-6 pb-2">
@@ -226,7 +233,7 @@ export function StudentProfessionalProfile({ user, vision, stats, paidActive }: 
         <Row
           label="AI credits"
           value={
-            user.plan === "TOP10" && user.credits > 100_000 ? (
+            isTopRankPlan(user.plan) && user.credits > 100_000 ? (
               <span className="text-zinc-300">TopRank allowance</span>
             ) : (
               <span className="tabular-nums">{user.credits.toLocaleString("en-IN")}</span>

@@ -51,6 +51,7 @@ export function CreditsClient({
     const res = await fetch("/api/payments/me");
     if (!res.ok) return;
     const data = await res.json();
+    if (!data.success) return;
     setCredits(data.user?.credits ?? 0);
     setTransactions(data.recentTransactions ?? []);
   }

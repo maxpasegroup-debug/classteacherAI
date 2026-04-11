@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 export async function GET() {
   const session = await getCurrentSession();
   if (!session) {
-    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+    return NextResponse.json({ success: false, message: "Unauthorized." }, { status: 401 });
   }
 
   await applyPlanExpiry(session.userId);
@@ -19,7 +19,6 @@ export async function GET() {
       id: true,
       name: true,
       email: true,
-      roles: true,
       plan: true,
       credits: true,
       subscriptionStatus: true,
@@ -27,7 +26,7 @@ export async function GET() {
     },
   });
   if (!user) {
-    return NextResponse.json({ error: "User not found." }, { status: 404 });
+    return NextResponse.json({ success: false, message: "User not found." }, { status: 404 });
   }
 
   const recentTransactions = await prisma.transaction.findMany({
@@ -37,10 +36,8 @@ export async function GET() {
   });
 
   return NextResponse.json({
-    user: {
-      ...user,
-      activeRole: session.activeRole,
-    },
+    success: true,
+    user,
     recentTransactions,
   });
 }

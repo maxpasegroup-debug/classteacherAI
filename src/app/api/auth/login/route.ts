@@ -2,7 +2,6 @@ import { setSessionCookie, signSessionToken } from "@/lib/auth";
 import { authJsonError } from "@/lib/auth-responses";
 import { applyPlanExpiry } from "@/lib/billing";
 import { comparePassword } from "@/lib/password";
-import { toSessionPayload } from "@/lib/session-payload";
 import { prisma } from "@/lib/prisma";
 import { loginSchema } from "@/lib/validators";
 
@@ -20,7 +19,6 @@ export async function POST(req: Request) {
     }
 
     const { email, password } = parsed.data;
-    console.log("LOGIN:", email);
 
     const user = await prisma.user.findUnique({
       where: { email },
@@ -29,7 +27,6 @@ export async function POST(req: Request) {
         name: true,
         email: true,
         password: true,
-        roles: true,
       },
     });
 
@@ -43,37 +40,18 @@ export async function POST(req: Request) {
       return authJsonError("Invalid email or password.", 401);
     }
 
-    if (!user.roles.includes("STUDENT")) {
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { roles: [...user.roles, "STUDENT"] },
-        select: { id: true },
-      });
-    }
-
     await applyPlanExpiry(user.id);
+
     const refreshed = await prisma.user.findUnique({
       where: { id: user.id },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        roles: true,
-        plan: true,
-        subscriptionExpiry: true,
-        credits: true,
-        studentProfile: { select: { onboardingCompleted: true } },
-      },
+      select: { id: true, name: true, email: true },
     });
     if (!refreshed) {
       return authJsonError("Login failed. Please try again.", 500);
     }
 
-    const payload = toSessionPayload(refreshed, "STUDENT");
-    const token = signSessionToken(payload);
+    const token = signSessionToken({ userId: refreshed.id });
     await setSessionCookie(token);
-
-    const onboardingCompleted = Boolean(refreshed.studentProfile?.onboardingCompleted);
 
     return Response.json({
       success: true,
@@ -82,10 +60,10 @@ export async function POST(req: Request) {
         name: refreshed.name,
         email: refreshed.email,
       },
-      redirectTo: onboardingCompleted ? "/dashboard" : "/onboarding",
+      redirectTo: "/dashboard",
     });
   } catch (error) {
-    console.error("LOGIN ERROR:", error);
+    console.error("AUTH ERROR:", error);
     return authJsonError("Something went wrong. Please try again.", 500);
   }
 }

@@ -1,5 +1,6 @@
-import type { Prisma, SubscriptionPlan, TransactionType } from "@prisma/client";
+import type { Prisma, TransactionType } from "@prisma/client";
 import { creditsForNewSubscription, subscriptionPeriodEnd } from "@/lib/billing";
+import { isTopRankPlan } from "@/lib/plan-tier";
 
 type Tx = Prisma.TransactionClient;
 
@@ -9,7 +10,7 @@ export async function applyTransactionFulfillment(
     id: string;
     userId: string;
     type: TransactionType;
-    plan: SubscriptionPlan | null;
+    plan: string | null;
     creditsPurchased: number | null;
   },
   razorpayPaymentId: string,
@@ -20,7 +21,9 @@ export async function applyTransactionFulfillment(
   });
 
   if (transaction.type === "SUBSCRIPTION" && transaction.plan) {
-    if (transaction.plan === "BASIC") {
+    const p = transaction.plan;
+
+    if (p === "BASIC") {
       await tx.user.update({
         where: { id: transaction.userId },
         data: {
@@ -32,14 +35,14 @@ export async function applyTransactionFulfillment(
       return;
     }
 
-    if (transaction.plan === "PRO" || transaction.plan === "TOP10") {
+    if (p === "PRO" || p === "ELITE" || isTopRankPlan(p)) {
       await tx.user.update({
         where: { id: transaction.userId },
         data: {
-          plan: transaction.plan,
+          plan: isTopRankPlan(p) ? "TOPRANK" : p,
           subscriptionStatus: "ACTIVE",
           subscriptionExpiry: subscriptionPeriodEnd(),
-          credits: { increment: creditsForNewSubscription(transaction.plan) },
+          credits: { increment: creditsForNewSubscription(isTopRankPlan(p) ? "TOPRANK" : p) },
         },
       });
     }

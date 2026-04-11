@@ -1,17 +1,15 @@
 /**
  * Single source of truth for public pricing (INR) and included AI credits.
- * DB enum stays BASIC / PRO / TOP10; user-facing names are Starter / Pro / TopRank.
- * Access rules: `applyPlanExpiry` + `assertCanUseAi` / Nexa branching in `@/lib/billing`.
+ * `User.plan` strings: BASIC | PRO | ELITE | TOPRANK.
  */
 
-import type { SubscriptionPlan } from "@prisma/client";
+import { isTopRankPlan } from "@/lib/plan-tier";
 
 export const PLANS = {
   BASIC: {
     key: "BASIC" as const,
     name: "Starter",
     label: "Starter",
-    /** Paid entry tier: limited attempts, basic analytics, platform UI. */
     priceInr: 499,
     creditsIncluded: 0,
     aiEnabled: false,
@@ -28,8 +26,17 @@ export const PLANS = {
     summary:
       "Full exam system, adaptive tests, limited Nexa AI coaching (credits), performance analytics, and study help.",
   },
-  TOP10: {
-    key: "TOP10" as const,
+  ELITE: {
+    key: "ELITE" as const,
+    name: "Elite",
+    label: "Elite",
+    priceInr: 2999,
+    creditsIncluded: 8000,
+    aiEnabled: true,
+    summary: "Higher AI credit pool, full exam system, and advanced analytics — between Pro and TopRank.",
+  },
+  TOPRANK: {
+    key: "TOPRANK" as const,
     name: "TopRank",
     label: "TopRank",
     priceInr: 4999,
@@ -40,14 +47,16 @@ export const PLANS = {
   },
 } as const;
 
-/** User-visible plan name for a DB tier. */
-export function subscriptionTierLabel(plan: SubscriptionPlan): string {
+/** User-visible plan name for a stored tier. */
+export function subscriptionTierLabel(plan: string): string {
   if (plan === "BASIC") return PLANS.BASIC.name;
   if (plan === "PRO") return PLANS.PRO.name;
-  return PLANS.TOP10.name;
+  if (plan === "ELITE") return PLANS.ELITE.name;
+  if (isTopRankPlan(plan)) return PLANS.TOPRANK.name;
+  return plan;
 }
 
-/** One-time AI credit top-ups. Requires active PRO or TOP10 — see create-order API. */
+/** One-time AI credit top-ups. Requires active paid AI tier — see create-order API. */
 export const CREDIT_TOP_UP_PACKS = {
   CREDITS_SMALL: {
     key: "CREDITS_SMALL" as const,
@@ -64,7 +73,7 @@ export const CREDIT_TOP_UP_PACKS = {
 } as const;
 
 export const AI_ACCESS_RULES = [
-  "Starter: no Nexa AI for teachers or students; use Pro or TopRank for coaching.",
-  "Pro: active billing period, AI credits > 0, daily request cap, daily token cap.",
+  "Starter: no Nexa AI; use Pro, Elite, or TopRank for coaching.",
+  "Pro / Elite: active billing period, AI credits > 0, daily request cap, daily token cap.",
   "TopRank: active billing period; high token allowance with monitoring; no per-request credit deduction.",
 ] as const;

@@ -10,7 +10,7 @@ type Action = "from_result" | "from_analysis" | "from_practice";
 
 export async function POST(request: Request) {
   const session = await getCurrentSession();
-  if (!session || session.activeRole !== "STUDENT") {
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
 
   if (state.pendingRetry) {
     return NextResponse.json(
-      { error: "Retry required — analysis is locked until you pass the round.", code: "RETRY_LOCK" },
+      { error: "Retry required â€” analysis is locked until you pass the round.", code: "RETRY_LOCK" },
       { status: 409 },
     );
   }
