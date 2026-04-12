@@ -1,13 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { AuthShell } from "@/components/auth-shell";
 import { PasswordField } from "@/components/password-field";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -23,13 +21,18 @@ export default function LoginPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
+        credentials: "include",
       });
       const data = await res.json();
-      if (!res.ok) {
+      console.log("Login response:", data);
+
+      if (!res.ok || !data.success) {
         setError(data.message ?? data.error ?? "Login failed.");
         return;
       }
-      router.push(data?.redirectTo ?? "/dashboard");
+
+      const dest = typeof data.redirectTo === "string" ? data.redirectTo : "/dashboard";
+      window.location.href = dest;
     } catch {
       setError("Network error. Please try again.");
     } finally {

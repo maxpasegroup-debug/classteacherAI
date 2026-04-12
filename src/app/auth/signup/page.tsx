@@ -1,13 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { FormEvent, useMemo, useState } from "react";
 import { AuthShell } from "@/components/auth-shell";
 import { PasswordField } from "@/components/password-field";
 
 export default function SignupPage() {
-  const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -33,15 +31,17 @@ export default function SignupPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, email, password }),
+        credentials: "include",
       });
       const data = await res.json();
+      console.log("Signup response:", data);
 
-      if (!res.ok) {
+      if (!res.ok || !data.success) {
         setError(data.message ?? data.error ?? "Could not create account.");
         return;
       }
 
-      router.push(data?.redirectTo ?? "/onboarding");
+      window.location.href = typeof data.redirectTo === "string" ? data.redirectTo : "/onboarding";
     } catch {
       setError("Network error. Please try again.");
     } finally {

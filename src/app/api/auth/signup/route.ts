@@ -1,4 +1,5 @@
-import { setSessionCookie, signSessionToken } from "@/lib/auth";
+import { NextResponse } from "next/server";
+import { applySessionCookieToResponse, signSessionToken } from "@/lib/auth";
 import { authJsonError } from "@/lib/auth-responses";
 import { hashPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
@@ -49,9 +50,8 @@ export async function POST(req: Request) {
     });
 
     const token = signSessionToken({ userId: user.id, onboardingCompleted: false });
-    await setSessionCookie(token);
 
-    return Response.json({
+    const res = NextResponse.json({
       success: true,
       user: {
         id: user.id,
@@ -60,6 +60,8 @@ export async function POST(req: Request) {
       },
       redirectTo: "/onboarding",
     });
+    applySessionCookieToResponse(res, token);
+    return res;
   } catch (error) {
     console.error("AUTH ERROR:", error);
     return authJsonError("Something went wrong. Please try again.", 500);

@@ -201,6 +201,7 @@ export const config = {
     "/api/nexa/:path*",
     "/api/onboarding",
     "/api/onboarding/:path*",
+    "/dashboard",
     "/dashboard/:path*",
     "/onboarding",
     "/onboarding/:path*",

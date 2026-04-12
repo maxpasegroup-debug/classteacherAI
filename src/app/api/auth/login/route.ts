@@ -1,4 +1,5 @@
-import { setSessionCookie, signSessionToken } from "@/lib/auth";
+import { NextResponse } from "next/server";
+import { applySessionCookieToResponse, signSessionToken } from "@/lib/auth";
 import { authJsonError } from "@/lib/auth-responses";
 import { applyPlanExpiry } from "@/lib/billing";
 import { comparePassword } from "@/lib/password";
@@ -57,9 +58,8 @@ export async function POST(req: Request) {
 
     const onboardingCompleted = Boolean(refreshed.studentProfile?.onboardingCompleted);
     const token = signSessionToken({ userId: refreshed.id, onboardingCompleted });
-    await setSessionCookie(token);
 
-    return Response.json({
+    const res = NextResponse.json({
       success: true,
       user: {
         id: refreshed.id,
@@ -68,6 +68,8 @@ export async function POST(req: Request) {
       },
       redirectTo: onboardingCompleted ? "/dashboard" : "/onboarding",
     });
+    applySessionCookieToResponse(res, token);
+    return res;
   } catch (error) {
     console.error("AUTH ERROR:", error);
     return authJsonError("Something went wrong. Please try again.", 500);

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCurrentSession, setSessionCookie, signSessionToken } from "@/lib/auth";
+import { applySessionCookieToResponse, getCurrentSession, signSessionToken } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { applyPlanExpiry } from "@/lib/billing";
 
@@ -34,13 +34,8 @@ export async function GET() {
 
     const onboardingCompleted = Boolean(user.studentProfile?.onboardingCompleted);
 
-    if (session.onboardingCompleted !== onboardingCompleted) {
-      const token = signSessionToken({ userId: session.userId, onboardingCompleted });
-      await setSessionCookie(token);
-    }
-
-    return NextResponse.json({
-      success: true,
+    const body = {
+      success: true as const,
       user: {
         id: user.id,
         name: user.name,
@@ -52,7 +47,16 @@ export async function GET() {
         onboardingCompleted,
       },
       redirectTo: onboardingCompleted ? "/dashboard" : "/onboarding",
-    });
+    };
+
+    const res = NextResponse.json(body);
+
+    if (session.onboardingCompleted !== onboardingCompleted) {
+      const token = signSessionToken({ userId: session.userId, onboardingCompleted });
+      applySessionCookieToResponse(res, token);
+    }
+
+    return res;
   } catch (error) {
     console.error("AUTH ERROR:", error);
     return NextResponse.json({ success: false, message: "Something went wrong." }, { status: 500 });

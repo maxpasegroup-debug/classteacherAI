@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
+import type { NextResponse } from "next/server";
 import { getCoreEnv } from "@/lib/env";
 import { normalizeSessionPayload, type SessionPayload } from "@/lib/session-payload";
 
@@ -36,15 +37,22 @@ export function verifySessionToken(token: string): SessionPayload {
   return normalized;
 }
 
+const SESSION_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax" as const,
+  maxAge: SESSION_TTL_SECONDS,
+  path: "/",
+};
+
+/** Prefer this in Route Handlers — pairs the cookie with the JSON body reliably. */
+export function applySessionCookieToResponse(res: NextResponse, token: string) {
+  res.cookies.set(SESSION_COOKIE, token, SESSION_COOKIE_OPTIONS);
+}
+
 export async function setSessionCookie(token: string) {
   const store = await cookies();
-  store.set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: SESSION_TTL_SECONDS,
-    path: "/",
-  });
+  store.set(SESSION_COOKIE, token, SESSION_COOKIE_OPTIONS);
 }
 
 export async function clearSessionCookie() {
