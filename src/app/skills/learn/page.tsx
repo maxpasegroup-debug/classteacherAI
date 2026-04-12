@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-export default async function SkillsPage() {
+export default async function SkillsLearnPage() {
   const session = await getCurrentSession();
   if (!session) redirect("/auth/login");
 
@@ -27,7 +27,9 @@ export default async function SkillsPage() {
         </div>
         <article className="rounded-xl bg-white p-4 shadow-sm">
           <h2 className="font-semibold">Progress & Certificates</h2>
-          <p className="text-sm text-slate-600">Tracked courses: {progress.length} · Certificates: {certificates.length}</p>
+          <p className="text-sm text-slate-600">
+            Tracked courses: {progress.length} · Certificates: {certificates.length}
+          </p>
         </article>
       </section>
     </main>

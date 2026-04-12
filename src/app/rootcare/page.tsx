@@ -130,7 +130,7 @@ export default async function RootcarePage() {
               Open counseling & study help
             </Link>
             <Link
-              href="/skills"
+              href="/skills/learn"
               className="inline-flex items-center justify-center rounded-xl border border-white/40 bg-white/10 px-5 py-3 text-sm font-semibold text-white hover:bg-white/15"
             >
               Browse skills to match your path
@@ -169,7 +169,7 @@ export default async function RootcarePage() {
             </li>
             <li>
               <span className="font-medium text-slate-900">Skills:</span>{" "}
-              <Link href="/skills" className="text-teal-700 underline">
+              <Link href="/skills/learn" className="text-teal-700 underline">
                 Continue learning in the same app
               </Link>
               {!advanced ? <span className="text-slate-500"> â€” upgrade for picks tied to your report.</span> : null}

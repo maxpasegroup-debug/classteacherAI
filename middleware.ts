@@ -90,7 +90,15 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (pathname.startsWith("/notifications") || pathname.startsWith("/skills")) {
+  if (pathname.startsWith("/notifications")) {
+    if (!loggedIn) return unauthorized();
+    if (!done) {
+      return NextResponse.redirect(new URL("/onboarding", request.url));
+    }
+    return NextResponse.next();
+  }
+
+  if (pathname.startsWith("/skills/learn")) {
     if (!loggedIn) return unauthorized();
     if (!done) {
       return NextResponse.redirect(new URL("/onboarding", request.url));
@@ -151,7 +159,6 @@ export function middleware(request: NextRequest) {
     pathname.startsWith("/today") ||
     pathname.startsWith("/nexa") ||
     pathname.startsWith("/classes") ||
-    pathname.startsWith("/pricing") ||
     pathname.startsWith("/credits");
 
   if ((isMainAppRoute || pathname.startsWith("/dashboard")) && !loggedIn) {
@@ -202,6 +209,7 @@ export const config = {
     "/classes/:path*",
     "/pricing/:path*",
     "/credits/:path*",
+    "/auth",
     "/auth/:path*",
     "/notifications/:path*",
     "/skills/:path*",
