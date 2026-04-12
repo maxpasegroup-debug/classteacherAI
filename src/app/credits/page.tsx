@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth";
-import { applyPlanExpiry } from "@/lib/billing";
 import { prisma } from "@/lib/prisma";
 import { CreditsClient } from "@/components/credits-client";
+import { requireActiveStudentAppAccess } from "@/lib/student-app-gate";
 
 export default async function CreditsPage() {
   const session = await getCurrentSession();
@@ -10,7 +10,7 @@ export default async function CreditsPage() {
     redirect("/auth/login");
   }
 
-  await applyPlanExpiry(session.userId);
+  await requireActiveStudentAppAccess(session.userId);
 
   const user = await prisma.user.findUnique({
     where: { id: session.userId },

@@ -30,7 +30,7 @@ export async function sendOtpEmail({ toEmail, toName, otpCode }: SendOtpEmailInp
           <div style="font-size: 28px; font-weight: 700; letter-spacing: 6px; margin: 20px 0; color: #0f172a;">
             ${otpCode}
           </div>
-          <p style="color: #475569;">This code expires in 5 minutes.</p>
+          <p style="color: #475569;">This code expires in 10 minutes.</p>
         </div>
       `,
     }),

@@ -109,8 +109,9 @@ function normalizeCapability(mode: Mode, cap: Capability, studentCaps: typeof ST
 }
 
 export default function NexaPage() {
-  const [hasAnyConversation, setHasAnyConversation] = useState(false);
-  const appliedDefaultMode = useRef(false);
+  const [appRole, setAppRole] = useState<"STUDENT" | "TEACHER" | null>(null);
+  const [teachxPlan, setTeachxPlan] = useState<string | null>(null);
+  const [teachxCredits, setTeachxCredits] = useState<number | null>(null);
   const [mode, setMode] = useState<Mode>("STUDENT");
   const [capability, setCapability] = useState<Capability>("DOUBT_SOLVING");
   const [credits, setCredits] = useState<number | null>(null);
@@ -136,50 +137,76 @@ export default function NexaPage() {
   const [sending, setSending] = useState(false);
   const [listening, setListening] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [upgradeGate, setUpgradeGate] = useState<{ open: boolean; message: string }>({ open: false, message: "" });
+  const [upgradeGate, setUpgradeGate] = useState<{
+    open: boolean;
+    message: string;
+    variant: "default" | "toprank" | "teachx";
+  }>({ open: false, message: "", variant: "default" });
   const messageEndRef = useRef<HTMLDivElement | null>(null);
 
   const studentCapList = useMemo(() => studentCapsForPlan(plan), [plan]);
 
   const loadPreferences = useCallback(async () => {
+    if (!appRole) return;
     try {
       const res = await fetch("/api/nexa/preferences");
       const data = await res.json().catch(() => ({}));
       if (!res.ok) return;
-      const bal = typeof data.credits === "number" ? data.credits : null;
-      setCredits(bal);
-      if (typeof data.plan === "string") setPlan(data.plan);
-      if (data.nexaPersona === "top10_trainer" || data.nexaPersona === "pro" || data.nexaPersona === "basic") {
-        setNexaPersona(data.nexaPersona);
+      if (appRole !== "TEACHER") {
+        const bal = typeof data.credits === "number" ? data.credits : null;
+        setCredits(bal);
+        if (typeof data.plan === "string") setPlan(data.plan);
+        if (data.nexaPersona === "top10_trainer" || data.nexaPersona === "pro" || data.nexaPersona === "basic") {
+          setNexaPersona(data.nexaPersona);
+        }
+        if (data.trainerMemory && typeof data.trainerMemory === "object") {
+          setTrainerMemory({
+            rankReadiness: typeof data.trainerMemory.rankReadiness === "number" ? data.trainerMemory.rankReadiness : 0,
+            weakTopics: Array.isArray(data.trainerMemory.weakTopics) ? data.trainerMemory.weakTopics : [],
+            examCount: typeof data.trainerMemory.examCount === "number" ? data.trainerMemory.examCount : 0,
+            lastAccuracyPct:
+              typeof data.trainerMemory.lastAccuracyPct === "number" ? data.trainerMemory.lastAccuracyPct : null,
+            lastExamAt: typeof data.trainerMemory.lastExamAt === "string" ? data.trainerMemory.lastExamAt : null,
+          });
+        } else {
+          setTrainerMemory(null);
+        }
+        if (typeof data.nexaStudentSubject === "string") setStudentSubject(data.nexaStudentSubject ?? "");
+        if (typeof data.nexaStudentLevel === "string") setStudentLevel(data.nexaStudentLevel ?? "");
       }
-      if (data.trainerMemory && typeof data.trainerMemory === "object") {
-        setTrainerMemory({
-          rankReadiness: typeof data.trainerMemory.rankReadiness === "number" ? data.trainerMemory.rankReadiness : 0,
-          weakTopics: Array.isArray(data.trainerMemory.weakTopics) ? data.trainerMemory.weakTopics : [],
-          examCount: typeof data.trainerMemory.examCount === "number" ? data.trainerMemory.examCount : 0,
-          lastAccuracyPct:
-            typeof data.trainerMemory.lastAccuracyPct === "number" ? data.trainerMemory.lastAccuracyPct : null,
-          lastExamAt: typeof data.trainerMemory.lastExamAt === "string" ? data.trainerMemory.lastExamAt : null,
-        });
-      } else {
-        setTrainerMemory(null);
-      }
-      if (typeof data.nexaStudentSubject === "string") setStudentSubject(data.nexaStudentSubject ?? "");
-      if (typeof data.nexaStudentLevel === "string") setStudentLevel(data.nexaStudentLevel ?? "");
       setPrefsDirty(false);
     } catch {
       /* ignore */
     }
-  }, []);
+  }, [appRole]);
 
   const loadMe = useCallback(async () => {
     try {
       const res = await fetch("/api/auth/me");
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success || !data.user) return;
-      setPlan(typeof data.user.plan === "string" ? data.user.plan : null);
-      const bal = typeof data.user.credits === "number" ? data.user.credits : null;
+      const role = data.user.role === "TEACHER" ? "TEACHER" : "STUDENT";
+      setAppRole(role);
+      const prof = (
+        data as {
+          profile?: {
+            plan?: string;
+            credits?: number;
+            teachxPlan?: string;
+            teachxCredits?: number;
+          };
+        }
+      ).profile;
+      setPlan(typeof prof?.plan === "string" ? prof.plan : null);
+      const bal = typeof prof?.credits === "number" ? prof.credits : null;
       setCredits(bal);
+      if (role === "TEACHER") {
+        setTeachxPlan(typeof prof?.teachxPlan === "string" ? prof.teachxPlan : null);
+        setTeachxCredits(typeof prof?.teachxCredits === "number" ? prof.teachxCredits : null);
+      } else {
+        setTeachxPlan(null);
+        setTeachxCredits(null);
+      }
     } catch {
       /* ignore */
     }
@@ -187,24 +214,50 @@ export default function NexaPage() {
 
   useEffect(() => {
     void loadMe();
+  }, [loadMe]);
+
+  useEffect(() => {
+    if (!appRole) return;
     void loadPreferences();
-  }, [loadMe, loadPreferences]);
-
-  useEffect(() => {
-    if (appliedDefaultMode.current) return;
-    if (hasAnyConversation) return;
-    appliedDefaultMode.current = true;
-    setMode("STUDENT");
-    setCapability(normalizeCapability("STUDENT", "DOUBT_SOLVING", studentCapList));
-  }, [hasAnyConversation, studentCapList]);
-
-  useEffect(() => {
-    void loadConversations();
-  }, []);
+  }, [appRole, loadPreferences]);
 
   useEffect(() => {
     messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, sending]);
+
+  const loadConversations = useCallback(async () => {
+    if (!appRole) return;
+    try {
+      const res = await fetch("/api/nexa/conversations");
+      if (!res.ok) return;
+      const data = await res.json();
+      const loaded = (data.conversations ?? []) as Conversation[];
+      setConversations(loaded);
+      if (loaded[0]) {
+        const m: Mode = loaded[0].mode === "TEACHER" ? "TEACHER" : "STUDENT";
+        setConversationId(loaded[0].id);
+        setMessages(loaded[0].messages ?? []);
+        setMode(m);
+        setCapability(normalizeCapability(m, loaded[0].capability as Capability, studentCapList));
+      } else {
+        setConversationId(null);
+        setMessages([]);
+        if (appRole === "TEACHER") {
+          setMode("TEACHER");
+          setCapability("LESSON_PLANNING");
+        } else {
+          setMode("STUDENT");
+          setCapability(normalizeCapability("STUDENT", "DOUBT_SOLVING", studentCapList));
+        }
+      }
+    } catch {
+      setError("Could not load chat history.");
+    }
+  }, [appRole, studentCapList]);
+
+  useEffect(() => {
+    void loadConversations();
+  }, [loadConversations]);
 
   useEffect(() => {
     let cancelled = false;
@@ -224,25 +277,6 @@ export default function NexaPage() {
       cancelled = true;
     };
   }, [mode, capability]);
-
-  async function loadConversations() {
-    try {
-      const res = await fetch("/api/nexa/conversations");
-      if (!res.ok) return;
-      const data = await res.json();
-      const loaded = (data.conversations ?? []) as Conversation[];
-      setConversations(loaded);
-      setHasAnyConversation(loaded.length > 0);
-      if (loaded[0]) {
-        setConversationId(loaded[0].id);
-        setMessages(loaded[0].messages ?? []);
-        setMode("STUDENT");
-        setCapability(normalizeCapability("STUDENT", loaded[0].capability as Capability, studentCapList));
-      }
-    } catch {
-      setError("Could not load chat history.");
-    }
-  }
 
   async function savePreferences() {
     try {
@@ -269,15 +303,23 @@ export default function NexaPage() {
     setConversationId(null);
     setMessages([]);
     setError("");
+    if (appRole === "TEACHER") {
+      setMode("TEACHER");
+      setCapability("LESSON_PLANNING");
+    } else {
+      setMode("STUDENT");
+      setCapability(normalizeCapability("STUDENT", "DOUBT_SOLVING", studentCapList));
+    }
   }
 
   function activateConversation(id: string) {
     const selected = conversations.find((item) => item.id === id);
     if (!selected) return;
+    const m: Mode = selected.mode === "TEACHER" ? "TEACHER" : "STUDENT";
     setConversationId(selected.id);
     setMessages(selected.messages);
-    setMode("STUDENT");
-    setCapability(normalizeCapability("STUDENT", selected.capability as Capability, studentCapList));
+    setMode(m);
+    setCapability(normalizeCapability(m, selected.capability as Capability, studentCapList));
     setError("");
   }
 
@@ -312,7 +354,10 @@ export default function NexaPage() {
     const content = input.trim();
     if (!content || sending) return;
     const proOut =
-      (plan === "PRO" || plan === "ELITE") && credits !== null && credits <= 0;
+      appRole !== "TEACHER" &&
+      (plan === "PRO" || plan === "ELITE") &&
+      credits !== null &&
+      credits <= 0;
     if (proOut) {
       setError("You have no AI credits. Buy credits or upgrade your plan to use Nexa AI.");
       return;
@@ -353,7 +398,13 @@ export default function NexaPage() {
         const msg = data?.message ?? data?.error ?? "Unable to get AI response.";
         setError(msg);
         setMessages((prev) => prev.filter((msg) => msg.id !== assistantMessageId && msg.id !== userMessage.id));
-        if (data?.upgradeRequired) setUpgradeGate({ open: true, message: msg });
+        if (data?.upgradeRequired) {
+          setUpgradeGate({
+            open: true,
+            message: msg,
+            variant: appRole === "TEACHER" ? "teachx" : "default",
+          });
+        }
         if (response.status === 402) {
           setCredits(0);
         }
@@ -379,7 +430,8 @@ export default function NexaPage() {
       }
 
       await loadConversations();
-      await loadPreferences();
+      if (appRole === "TEACHER") await loadMe();
+      else await loadPreferences();
     } catch {
       setError("Network error while streaming response.");
     } finally {
@@ -388,7 +440,7 @@ export default function NexaPage() {
     }
   }
 
-  const capList = studentCapList;
+  const capList = mode === "TEACHER" ? TEACHER_CAPABILITIES : studentCapList;
 
   return (
     <section className="space-y-3">
@@ -397,11 +449,13 @@ export default function NexaPage() {
           <div>
             <p className="text-sm font-semibold text-slate-900">Nexa</p>
             <p className="text-xs text-slate-500">
-              {nexaPersona === "top10_trainer" && mode === "STUDENT"
-                ? "TopRank AI Trainer — strict coach; performance-aware; no casual chat."
-                : nexaPersona === "pro" && mode === "STUDENT"
-                  ? "Pro — supportive coach: concepts, practice questions, next-test ideas."
-                  : "Context-aware assistant — save subject & level for better answers."}
+              {appRole === "TEACHER" && mode === "TEACHER"
+                ? "TeachX — lesson planning, content creation, and classroom comms (Nexa)."
+                : nexaPersona === "top10_trainer" && mode === "STUDENT"
+                  ? "TopRank AI Trainer — strict coach; performance-aware; no casual chat."
+                  : nexaPersona === "pro" && mode === "STUDENT"
+                    ? "Pro — supportive coach: concepts, practice questions, next-test ideas."
+                    : "Context-aware assistant — save subject & level for better answers."}
             </p>
             {nexaPersona === "top10_trainer" && mode === "STUDENT" && trainerMemory ? (
               <p className="mt-1 text-xs text-violet-900">
@@ -424,11 +478,17 @@ export default function NexaPage() {
                 Pro coach
               </span>
             ) : null}
+            {appRole === "TEACHER" && teachxPlan ? (
+              <span className="rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-900">
+                TeachX {teachxPlan}
+                {teachxCredits !== null ? ` · ${teachxCredits.toLocaleString()} credits` : ""}
+              </span>
+            ) : null}
             {plan === "BASIC" && mode === "STUDENT" ? (
               <span className="rounded-lg bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900">
                 Basic: 5 Nexa messages / day
               </span>
-            ) : credits !== null ? (
+            ) : appRole !== "TEACHER" && credits !== null ? (
               <span
                 className={`rounded-lg px-2.5 py-1 text-xs font-medium ${
                   credits <= 0 ? "bg-red-50 text-red-700" : "bg-slate-100 text-slate-700"
@@ -447,45 +507,47 @@ export default function NexaPage() {
           </div>
         </div>
 
-        <div className="mb-3 rounded-xl border border-slate-100 bg-slate-50/80 p-3">
-          <p className="text-xs font-medium text-slate-700">Context (saved to your account)</p>
-          <div className="mt-2 grid gap-2 sm:grid-cols-2">
-            <label className="block text-xs text-slate-500">
-              Subject
-              <input
-                value={studentSubject}
-                onChange={(e) => {
-                  setStudentSubject(e.target.value);
-                  setPrefsDirty(true);
-                }}
-                placeholder="e.g. Mathematics, Science"
-                className="mt-0.5 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm"
-              />
-            </label>
-            <label className="block text-xs text-slate-500">
-              Level / grade
-              <input
-                value={studentLevel}
-                onChange={(e) => {
-                  setStudentLevel(e.target.value);
-                  setPrefsDirty(true);
-                }}
-                placeholder="e.g. Class 10, Grade 9"
-                className="mt-0.5 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm"
-              />
-            </label>
+        {appRole !== "TEACHER" ? (
+          <div className="mb-3 rounded-xl border border-slate-100 bg-slate-50/80 p-3">
+            <p className="text-xs font-medium text-slate-700">Context (saved to your account)</p>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              <label className="block text-xs text-slate-500">
+                Subject
+                <input
+                  value={studentSubject}
+                  onChange={(e) => {
+                    setStudentSubject(e.target.value);
+                    setPrefsDirty(true);
+                  }}
+                  placeholder="e.g. Mathematics, Science"
+                  className="mt-0.5 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm"
+                />
+              </label>
+              <label className="block text-xs text-slate-500">
+                Level / grade
+                <input
+                  value={studentLevel}
+                  onChange={(e) => {
+                    setStudentLevel(e.target.value);
+                    setPrefsDirty(true);
+                  }}
+                  placeholder="e.g. Class 10, Grade 9"
+                  className="mt-0.5 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm"
+                />
+              </label>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void savePreferences()}
+                disabled={!prefsDirty}
+                className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+              >
+                Save context
+              </button>
+            </div>
           </div>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => void savePreferences()}
-              disabled={!prefsDirty}
-              className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
-            >
-              Save context
-            </button>
-          </div>
-        </div>
+        ) : null}
 
         <div className="mb-3 grid gap-2 sm:grid-cols-2">
           {capList.map((item) => (
@@ -540,7 +602,9 @@ export default function NexaPage() {
         <div className="h-[48vh] space-y-2 overflow-y-auto rounded-xl bg-slate-50 p-3">
           {messages.length === 0 ? (
             <p className="text-sm text-slate-500">
-              Ask a doubt, learn a concept, or get exam tips — Nexa remembers this thread.
+              {mode === "TEACHER"
+                ? "Describe your class, topic, or format — Nexa helps with plans, materials, and messaging."
+                : "Ask a doubt, learn a concept, or get exam tips — Nexa remembers this thread."}
             </p>
           ) : (
             messages.map((msg) => (
@@ -575,10 +639,16 @@ export default function NexaPage() {
           />
           <button
             type="submit"
-            disabled={sending || ((plan === "PRO" || plan === "ELITE") && credits !== null && credits <= 0)}
+            disabled={
+              sending ||
+              (appRole !== "TEACHER" &&
+                (plan === "PRO" || plan === "ELITE") &&
+                credits !== null &&
+                credits <= 0)
+            }
             className="rounded-xl bg-gradient-to-r from-blue-600 to-emerald-500 px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
           >
-            {plan === "PRO" || plan === "ELITE"
+            {appRole !== "TEACHER" && (plan === "PRO" || plan === "ELITE")
               ? "Send (uses AI credits)"
               : plan === "BASIC"
                 ? "Send"
@@ -586,7 +656,7 @@ export default function NexaPage() {
           </button>
         </form>
         {error ? <p className="mt-2 text-xs text-red-600">{error}</p> : null}
-        {(plan === "PRO" || plan === "ELITE") && credits === 0 ? (
+        {appRole !== "TEACHER" && (plan === "PRO" || plan === "ELITE") && credits === 0 ? (
           <p className="mt-2 text-xs text-amber-800">
             You are out of AI credits. Top up or upgrade.{" "}
             <Link href="/credits" className="font-medium text-blue-700 underline">
@@ -603,9 +673,9 @@ export default function NexaPage() {
 
       <UpgradeGateModal
         open={upgradeGate.open}
-        variant="toprank"
+        variant={upgradeGate.variant}
         message={upgradeGate.message}
-        onClose={() => setUpgradeGate({ open: false, message: "" })}
+        onClose={() => setUpgradeGate({ open: false, message: "", variant: "default" })}
       />
     </section>
   );

@@ -3,10 +3,13 @@
 import Link from "next/link";
 import { isTopRankPlan } from "@/lib/plan-tier";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { NexaAssistant } from "@/components/NexaAssistant";
+import { NexaInsightsPanel } from "@/components/nexa-insights-panel";
+import { NexaSmartActions } from "@/components/nexa-smart-actions";
 import { RootCareFunnelNudge } from "@/components/rootcare-funnel-nudge";
-import { UnlockRankJourneyModal } from "@/components/unlock-rank-journey-modal";
 import { TopRankVisionStrip } from "@/components/toprank-vision-strip";
 import { UpgradeGateModal } from "@/components/upgrade-gate-modal";
+import { defaultQuickPrompts, deriveStudentDashboardInsights } from "@/lib/nexa-assistant-context";
 import type { TopRankVisionDto } from "@/components/toprank-hub-client";
 
 type RankPayload = {
@@ -37,8 +40,7 @@ type HomePayload = {
   notifications: string[];
 };
 
-type PreviewProps = {
-  previewOnly: boolean;
+type Props = {
   userName: string;
   plan: string;
   rankProfile?: {
@@ -51,22 +53,17 @@ type PreviewProps = {
   } | null;
 };
 
-export function StudentTodayClient({ previewOnly, userName, plan, rankProfile }: PreviewProps) {
-  const [unlockOpen, setUnlockOpen] = useState(previewOnly);
-  const [loading, setLoading] = useState(!previewOnly);
+export function StudentTodayClient({ userName, plan, rankProfile }: Props) {
+  const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [home, setHome] = useState<HomePayload | null>(null);
   const [rankBoard, setRankBoard] = useState<RankPayload | null>(null);
   const [topVision, setTopVision] = useState<TopRankVisionDto | null | false>(false);
   const [hubRefresh, setHubRefresh] = useState(0);
   const [conversionOpen, setConversionOpen] = useState(false);
-
-  useEffect(() => {
-    setUnlockOpen(previewOnly);
-  }, [previewOnly]);
+  const [nexaQueue, setNexaQueue] = useState<{ t: string; n: number } | null>(null);
 
   const loadHub = useCallback(async () => {
-    if (previewOnly) return;
     setLoading(true);
     setLoadError("");
     try {
@@ -107,7 +104,7 @@ export function StudentTodayClient({ previewOnly, userName, plan, rankProfile }:
     } finally {
       setLoading(false);
     }
-  }, [previewOnly, plan]);
+  }, [plan]);
 
   useEffect(() => {
     void loadHub();
@@ -125,34 +122,20 @@ export function StudentTodayClient({ previewOnly, userName, plan, rankProfile }:
 
   const streakFire = home?.streak.days ? `🔥 ${home.streak.days} day streak` : "🔥 Start your streak";
 
-  if (previewOnly) {
-    return (
-      <div className="relative space-y-4">
-        <UnlockRankJourneyModal open={unlockOpen} onClose={() => setUnlockOpen(false)} />
-        {!unlockOpen ? (
-          <button
-            type="button"
-            onClick={() => setUnlockOpen(true)}
-            className="fixed bottom-[4.25rem] left-1/2 z-50 -translate-x-1/2 rounded-full bg-amber-400 px-4 py-2 text-sm font-semibold text-zinc-950 shadow-lg shadow-amber-500/20"
-          >
-            Unlock training · ₹499
-          </button>
-        ) : null}
-        <header className="space-y-1">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-zinc-500">Home</p>
-          <h1 className="text-2xl font-semibold tracking-tight text-white">Dashboard</h1>
-          <p className="text-sm text-zinc-400">Preview · Hi {userName}</p>
-        </header>
-        <div className="pointer-events-none select-none space-y-4 blur-[2.5px] opacity-55">
-          <section className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-200/70">Today&apos;s mission</p>
-            <div className="mt-3 h-10 rounded-xl bg-zinc-800/80" />
-          </section>
-          <div className="h-12 rounded-xl bg-amber-400/30" />
-        </div>
-      </div>
-    );
-  }
+  const recentActivity = useMemo(() => {
+    if (!home) return undefined;
+    const parts = [
+      home.mission
+        ? `Mission ${home.mission.progressPct}% · ${home.mission.label} · today ${home.mission.todaySubmitted}/${home.mission.dailyExamTarget}`
+        : null,
+      home.weakAreas?.length ? `Weak areas: ${home.weakAreas.slice(0, 5).join(", ")}` : null,
+      home.streak ? `Streak ${home.streak.days}d` : null,
+      home.rank?.overallAccuracyPct != null ? `Accuracy ~${Math.round(home.rank.overallAccuracyPct)}%` : null,
+    ].filter(Boolean);
+    return parts.join(" | ").slice(0, 500);
+  }, [home]);
+
+  const nexaInsights = useMemo(() => deriveStudentDashboardInsights(home, rankProfile), [home, rankProfile]);
 
   return (
     <div className="space-y-4">
@@ -262,15 +245,24 @@ export function StudentTodayClient({ previewOnly, userName, plan, rankProfile }:
       </section>
 
       <section className="rounded-2xl border border-violet-500/30 bg-violet-950/25 p-4">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-violet-300/90">Nexa trainer</p>
-        <p className="mt-1 text-xs text-zinc-400">Quick debrief and next-step coaching.</p>
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-violet-300/90">Nexa</p>
+        <p className="mt-1 text-xs text-zinc-400">Central intelligence — quick actions or the floating assistant.</p>
+        <div className="mt-3">
+          <NexaSmartActions
+            theme="dark"
+            actions={defaultQuickPrompts("STUDENT", "dashboard")}
+            onSelect={(prompt) => setNexaQueue({ t: prompt, n: Date.now() })}
+          />
+        </div>
         <Link
           href="/nexa"
-          className="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-violet-500 py-3 text-sm font-semibold text-white hover:bg-violet-400"
+          className="mt-4 inline-flex w-full items-center justify-center rounded-xl border border-violet-500/40 py-2.5 text-xs font-semibold text-violet-200 hover:bg-violet-950/40"
         >
-          Open Nexa
+          Full Nexa workspace →
         </Link>
       </section>
+
+      <NexaInsightsPanel theme="dark" insights={nexaInsights} />
 
       {rankProfile ? (
         <section className="rounded-2xl border border-blue-500/20 bg-blue-950/20 p-3 text-xs text-zinc-300">
@@ -328,6 +320,18 @@ export function StudentTodayClient({ previewOnly, userName, plan, rankProfile }:
         variant="toprank"
         message="See how elite students loop exams, debriefs, and retries — without dead ends between sessions."
         onClose={() => setConversionOpen(false)}
+      />
+
+      <NexaAssistant
+        role="STUDENT"
+        module="dashboard"
+        planLabel={plan}
+        recentActivity={recentActivity}
+        theme="dark"
+        storageKey="nexa_asst_student_today"
+        injectPrompt={nexaQueue?.t ?? null}
+        injectNonce={nexaQueue?.n ?? 0}
+        onInjectConsumed={() => setNexaQueue(null)}
       />
     </div>
   );

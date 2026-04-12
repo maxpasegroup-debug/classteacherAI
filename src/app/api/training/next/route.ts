@@ -48,6 +48,8 @@ export async function POST(request: Request) {
       plan: gate.user.plan,
       subscriptionStatus: gate.user.subscriptionStatus,
       subscriptionExpiry: gate.user.subscriptionExpiry,
+      isTrialActive: gate.user.isTrialActive,
+      trialEndsAt: gate.user.trialEndsAt,
     },
     "exam_access",
     { examsThisUtcWeek, nexaMessagesToday: 0 },

@@ -85,12 +85,14 @@ export function buildNexaSystemPrompt(params: {
   studentPersona: StudentNexaPersona;
   trainerMemoryLine?: string;
   proSupportMemoryLine?: string;
+  /** Nexa Assistant product surface (embedded dashboards) — appended; must not override safety/persona core. */
+  productContextLine?: string;
 }) {
   const { mode, capability, capabilityGuide, activeRole, userName, subjectLine, chatTopicsLine, studentPersona } =
     params;
 
   if (mode === "TEACHER") {
-    return [
+    const core = [
       TEACHER_CORE,
       capabilityGuide[capability],
       `Educator display name: ${userName}.`,
@@ -99,6 +101,7 @@ export function buildNexaSystemPrompt(params: {
       "Use prior messages in this thread as memory.",
       "Keep responses actionable and concise unless the user asks for depth.",
     ].join("\n");
+    return params.productContextLine ? `${core}\n\n---\n${params.productContextLine}` : core;
   }
 
   const personaBlock =
@@ -129,7 +132,7 @@ export function buildNexaSystemPrompt(params: {
         ? "Stay training-oriented: weak areas, next practice, or next test — avoid generic life advice."
         : "Keep replies rank-relevant even in short mode.";
 
-  return [
+  const core = [
     personaBlock + roleHint + topRankMemory + proMemory + coachBlock,
     capabilityGuide[capability],
     `Learner display name: ${userName}.`,
@@ -138,4 +141,5 @@ export function buildNexaSystemPrompt(params: {
     "Use prior messages in this thread as memory. Reference earlier details when helpful.",
     closing,
   ].join("\n");
+  return params.productContextLine ? `${core}\n\n---\n${params.productContextLine}` : core;
 }

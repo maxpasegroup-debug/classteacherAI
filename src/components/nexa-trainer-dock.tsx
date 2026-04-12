@@ -35,8 +35,11 @@ export function NexaTrainerDock() {
     void (async () => {
       try {
         const res = await fetch("/api/auth/me");
-        const data = (await res.json().catch(() => ({}))) as { user?: MeUser; success?: boolean };
-        if (res.ok && data.user?.plan) setPlan(data.user.plan);
+        const data = (await res.json().catch(() => ({}))) as {
+          profile?: MeUser;
+          success?: boolean;
+        };
+        if (res.ok && data.profile?.plan) setPlan(data.profile.plan);
       } catch {
         setPlan(null);
       } finally {

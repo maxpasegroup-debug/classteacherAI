@@ -47,8 +47,7 @@ export function UnlockRankJourneyModal({ open, onClose }: UnlockRankJourneyModal
           Unlock Your Rank Journey
         </h2>
         <p className="mt-2 text-sm leading-relaxed text-slate-600">
-          Explore the platform preview, then subscribe to attempt exams, unlock analytics, and turn on AI coaching at the
-          level that fits your goals.
+          Your free trial has ended. Upgrade to continue training.
         </p>
         <ul className="mt-4 space-y-2 border-y border-slate-100 py-4 text-sm text-slate-700">
           <li className="flex gap-2">
@@ -69,10 +68,10 @@ export function UnlockRankJourneyModal({ open, onClose }: UnlockRankJourneyModal
         </ul>
         <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
           <Link
-            href="/pricing#starter"
+            href="/plans"
             className="inline-flex flex-1 items-center justify-center rounded-xl bg-slate-900 px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-slate-800"
           >
-            Start with ₹499
+            View plans
           </Link>
           <Link
             href="/pricing#compare"

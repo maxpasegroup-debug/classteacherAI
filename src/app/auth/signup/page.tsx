@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FormEvent, useMemo, useState } from "react";
 import { AuthShell } from "@/components/auth-shell";
 import { PasswordField } from "@/components/password-field";
 
 export default function SignupPage() {
+  const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -29,7 +31,10 @@ export default function SignupPage() {
     try {
       const res = await fetch("/api/auth/signup", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-Signup-Source": "student",
+        },
         body: JSON.stringify({ name, email, password }),
         credentials: "include",
       });
@@ -41,7 +46,7 @@ export default function SignupPage() {
         return;
       }
 
-      window.location.href = typeof data.redirectTo === "string" ? data.redirectTo : "/onboarding";
+      router.push(typeof data.redirectTo === "string" ? data.redirectTo : "/onboarding");
     } catch {
       setError("Network error. Please try again.");
     } finally {

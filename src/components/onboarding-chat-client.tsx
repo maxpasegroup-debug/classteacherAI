@@ -151,7 +151,7 @@ export function OnboardingChatClient({ defaultName }: { defaultName: string }) {
             setError((data as { message?: string }).message ?? "Could not save your profile.");
             return;
           }
-          router.push("/dashboard");
+          router.push("/plans");
           router.refresh();
         } catch {
           setError("Network error. Please try again.");

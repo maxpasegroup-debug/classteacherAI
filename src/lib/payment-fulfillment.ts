@@ -30,6 +30,7 @@ export async function applyTransactionFulfillment(
           plan: "BASIC",
           subscriptionStatus: "ACTIVE",
           subscriptionExpiry: subscriptionPeriodEnd(),
+          isTrialActive: false,
         },
       });
       return;
@@ -42,6 +43,7 @@ export async function applyTransactionFulfillment(
           plan: isTopRankPlan(p) ? "TOPRANK" : p,
           subscriptionStatus: "ACTIVE",
           subscriptionExpiry: subscriptionPeriodEnd(),
+          isTrialActive: false,
           credits: { increment: creditsForNewSubscription(isTopRankPlan(p) ? "TOPRANK" : p) },
         },
       });

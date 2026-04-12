@@ -23,7 +23,7 @@ export async function POST(request: Request) {
   }
 
   const kind = body.kind;
-  const isSubscription = kind === "PRO" || kind === "ELITE" || kind === "TOPRANK";
+  const isSubscription = kind === "BASIC" || kind === "PRO" || kind === "ELITE" || kind === "TOPRANK";
 
   await applyPlanExpiry(session.userId);
   const user = await prisma.user.findUnique({
@@ -58,7 +58,9 @@ export async function POST(request: Request) {
     }
   }
 
-  const amountInr = isSubscription ? SUBSCRIPTION_PLANS[kind].amountInr : CREDIT_PACKS[kind].amountInr;
+  const amountInr = isSubscription
+    ? SUBSCRIPTION_PLANS[kind as keyof typeof SUBSCRIPTION_PLANS].amountInr
+    : CREDIT_PACKS[kind].amountInr;
   const amountPaise = amountInr * 100;
 
   const razorpay = getRazorpayClient();
@@ -78,7 +80,7 @@ export async function POST(request: Request) {
       type: isSubscription ? "SUBSCRIPTION" : "CREDIT_PURCHASE",
       amount: amountInr,
       status: "CREATED",
-      plan: isSubscription ? SUBSCRIPTION_PLANS[kind].dbPlan : null,
+      plan: isSubscription ? SUBSCRIPTION_PLANS[kind as keyof typeof SUBSCRIPTION_PLANS].dbPlan : null,
       creditsPurchased: isSubscription ? null : CREDIT_PACKS[kind].credits,
       razorpayOrderId: order.id,
     },

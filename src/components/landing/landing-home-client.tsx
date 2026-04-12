@@ -505,15 +505,26 @@ export function LandingHomeClient() {
                   <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{p.label}</p>
                   <p className="mt-2 text-lg font-bold text-slate-900">{p.name}</p>
                   <p className="mt-4 text-3xl font-bold tabular-nums text-slate-950">
-                    {p.priceInr === 0 ? "Free" : `₹${p.priceInr.toLocaleString("en-IN")}`}
-                    {p.priceInr > 0 ? <span className="text-base font-normal text-slate-500">/mo</span> : null}
+                    {key === "BASIC" ? (
+                      <>
+                        15-day trial
+                        <span className="mt-1 block text-lg font-semibold text-slate-600">
+                          then ₹{p.priceInr.toLocaleString("en-IN")}/mo
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        ₹{p.priceInr.toLocaleString("en-IN")}
+                        <span className="text-base font-normal text-slate-500">/mo</span>
+                      </>
+                    )}
                   </p>
                   <p className="mt-4 flex-1 text-sm leading-relaxed text-slate-600">{p.summary}</p>
                   <MarketingCta
                     variant={isTop ? "primary" : "secondary"}
                     className={`mt-6 h-12 w-full justify-center sm:w-auto ${isTop ? "!border-0 !bg-gradient-to-r !from-sky-600 !to-emerald-600 !shadow-lg hover:!from-sky-500 hover:!to-emerald-500" : "!shadow-none"}`}
                   >
-                    {p.priceInr === 0 ? "Start free" : "Choose plan"}
+                    {key === "BASIC" ? "Start free trial" : "Choose plan"}
                   </MarketingCta>
                 </GradientBorderCard>
               </motion.div>

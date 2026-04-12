@@ -9,6 +9,8 @@ export type PlanUserSnapshot = {
   plan: string;
   subscriptionStatus: string;
   subscriptionExpiry: Date | null;
+  isTrialActive?: boolean;
+  trialEndsAt?: Date | null;
 };
 
 export type PlanUsageSnapshot = {
@@ -42,6 +44,22 @@ export function hasActivePaidPeriod(user: PlanUserSnapshot): boolean {
   return user.subscriptionExpiry.getTime() >= Date.now();
 }
 
+export function hasActiveTrial(user: PlanUserSnapshot): boolean {
+  if (!user.isTrialActive || !user.trialEndsAt) return false;
+  return user.trialEndsAt.getTime() >= Date.now();
+}
+
+/** Basic tier: active trial or active paid period (incl. paid Basic after trial). */
+export function hasBasicAppAccess(user: PlanUserSnapshot): boolean {
+  if (user.plan !== "BASIC") return false;
+  return hasActiveTrial(user) || hasActivePaidPeriod(user);
+}
+
+/** Student shell: paid subscription period or active trial window. */
+export function canAccessStudentApp(user: PlanUserSnapshot): boolean {
+  return hasActivePaidPeriod(user) || hasActiveTrial(user);
+}
+
 /**
  * Pure rule engine: plan + current usage → allowed or upgrade path.
  * Pass fresh `usage` from `countExamStartsThisUtcWeek` / `countNexaMessagesToday` when gating rate limits.
@@ -59,6 +77,14 @@ export function checkUserAccess(
   switch (feature) {
     case "exam_access": {
       if (plan === "BASIC") {
+        if (!hasBasicAppAccess(user)) {
+          return {
+            ok: false,
+            upgradeRequired: true,
+            message: "Start your free trial or subscribe to continue training.",
+            code: "SUBSCRIPTION",
+          };
+        }
         if (usage.examsThisUtcWeek >= BASIC_EXAMS_PER_UTC_WEEK) {
           return {
             ok: false,
@@ -108,6 +134,14 @@ export function checkUserAccess(
     }
     case "nexa_access": {
       if (plan === "BASIC") {
+        if (!hasBasicAppAccess(user)) {
+          return {
+            ok: false,
+            upgradeRequired: true,
+            message: "Your free trial has ended. Upgrade to continue training.",
+            code: "SUBSCRIPTION",
+          };
+        }
         if (usage.nexaMessagesToday >= BASIC_NEXA_MESSAGES_PER_DAY) {
           return {
             ok: false,

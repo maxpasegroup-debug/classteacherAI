@@ -28,7 +28,7 @@ export function MarketingAuthProvider({ children }: { children: React.ReactNode 
         };
         if (cancelled) return;
         if (data.success && data.user) {
-          setState({ resolved: true, appHomeHref: data.redirectTo ?? "/dashboard" });
+          setState({ resolved: true, appHomeHref: data.redirectTo ?? "/student/today" });
         } else {
           setState({ resolved: true, appHomeHref: "/auth" });
         }

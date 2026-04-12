@@ -1,8 +1,12 @@
-/** JWT session: user id + onboarding gate for middleware (refreshed from DB on login/me/onboarding). */
+/** JWT session: user id + onboarding gate + role for middleware routing. */
+export type AppUserRole = "STUDENT" | "TEACHER";
+
 export type SessionPayload = {
   userId: string;
-  /** When false or omitted (legacy tokens), user must complete onboarding. */
+  /** When false or omitted (legacy tokens), user must complete onboarding (students). */
   onboardingCompleted?: boolean;
+  /** Omitted in legacy tokens → treated as STUDENT in middleware. */
+  role?: AppUserRole;
 };
 
 export function normalizeSessionPayload(decoded: unknown): SessionPayload | null {
@@ -13,5 +17,9 @@ export function normalizeSessionPayload(decoded: unknown): SessionPayload | null
   if (typeof o.onboardingCompleted === "boolean") {
     onboardingCompleted = o.onboardingCompleted;
   }
-  return { userId: o.userId, onboardingCompleted };
+  let role: AppUserRole | undefined;
+  if (o.role === "TEACHER" || o.role === "STUDENT") {
+    role = o.role;
+  }
+  return { userId: o.userId, onboardingCompleted, role };
 }

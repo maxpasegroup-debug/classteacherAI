@@ -118,7 +118,16 @@ export async function POST(request: Request) {
       },
     });
 
-    const token = signSessionToken({ userId: session.userId, onboardingCompleted: true });
+    const u = await prisma.user.findUnique({
+      where: { id: session.userId },
+      select: { role: true },
+    });
+    const appRole = u?.role === "TEACHER" ? "TEACHER" : "STUDENT";
+    const token = signSessionToken({
+      userId: session.userId,
+      onboardingCompleted: true,
+      role: appRole,
+    });
     await setSessionCookie(token);
 
     return NextResponse.json({ success: true, onboardingCompleted: true, profile });

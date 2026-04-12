@@ -1,17 +1,19 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { AuthShell } from "@/components/auth-shell";
 import { PasswordField } from "@/components/password-field";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = async (e: FormEvent) => {
+  async function handleLogin(e: FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError("");
@@ -19,34 +21,33 @@ export default function LoginPage() {
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email,
-          password,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
         credentials: "include",
       });
-
       const data = await res.json();
       console.log("LOGIN RESPONSE:", data);
 
-      if (data.success) {
-        window.location.href = "/dashboard";
+      if (!res.ok || !data.success) {
+        const msg = data.message ?? data.error ?? "Login failed.";
+        setError(msg);
         return;
       }
 
-      const msg = data.message || "Login failed";
-      alert(msg);
-      setError(msg);
+      const role = (data as { user?: { role?: string } }).user?.role;
+      const dest =
+        typeof data.redirectTo === "string"
+          ? data.redirectTo
+          : role === "TEACHER"
+            ? "/teachx/dashboard"
+            : "/student/today";
+      router.push(dest);
     } catch {
-      alert("Network error. Please try again.");
       setError("Network error. Please try again.");
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   return (
     <AuthShell
@@ -83,7 +84,7 @@ export default function LoginPage() {
           disabled={loading}
           className="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-60"
         >
-          {loading ? "Signing in..." : "Login"}
+          {loading ? "Signing in..." : "Sign in"}
         </button>
       </form>
     </AuthShell>

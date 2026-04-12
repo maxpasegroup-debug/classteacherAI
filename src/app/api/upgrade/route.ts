@@ -58,6 +58,7 @@ export async function POST(request: Request) {
       plan: dbPlan,
       subscriptionStatus: "ACTIVE",
       subscriptionExpiry: periodEnd,
+      isTrialActive: false,
       credits: { increment: credits },
     },
   });

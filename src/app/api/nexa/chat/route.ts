@@ -30,6 +30,8 @@ import {
   PRO_NEXA_MESSAGES_PER_DAY,
 } from "@/lib/plan-access";
 import { isTopRankPlan } from "@/lib/plan-tier";
+import { formatNexaProductContextLine, sanitizeNexaContextPayload } from "@/lib/nexa-assistant-context";
+import { runTeacherNexaChat } from "@/lib/nexa-teacher-handler";
 
 export const runtime = "nodejs";
 
@@ -40,6 +42,9 @@ type RequestBody = {
   className?: string;
   subject?: string;
   level?: string;
+  mode?: string;
+  /** Nexa Assistant — UI surface context (sanitized); does not change auth. */
+  nexaContext?: unknown;
 };
 
 const STUDENT_CAPABILITIES: NexaCapability[] = ["DOUBT_SOLVING", "CONCEPT_TEACHING", "EXAM_TIPS", "NOTES_GENERATION"];
@@ -87,20 +92,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Message content is required.", code: "VALIDATION" }, { status: 400 });
   }
 
-  const mode: NexaMode = "STUDENT";
-  const capability = normalizeCapability(body.capability);
-
   await applyPlanExpiry(session.userId);
-  const user = await prisma.user.findUnique({
+  const fullUser = await prisma.user.findUnique({
     where: { id: session.userId },
     select: {
+      role: true,
+      teachxPlan: true,
+      teachxCredits: true,
       plan: true,
       subscriptionStatus: true,
       subscriptionExpiry: true,
+      isTrialActive: true,
+      trialEndsAt: true,
       credits: true,
+      name: true,
+      nexaStudentLevel: true,
+      nexaStudentSubject: true,
     },
   });
-  if (!user) {
+  if (!fullUser) {
     return NextResponse.json(
       { success: false, upgradeRequired: false, message: "User not found.", error: "User not found.", code: "NOT_FOUND" },
       { status: 404 },
@@ -115,6 +125,26 @@ export async function POST(request: Request) {
   const priorPrompt = usageRow?.aiTokensPrompt ?? 0;
   const priorCompletion = usageRow?.aiTokensCompletion ?? 0;
 
+  if (fullUser.role === "TEACHER") {
+    return runTeacherNexaChat({
+      session,
+      body,
+      user: {
+        name: fullUser.name,
+        teachxPlan: fullUser.teachxPlan,
+        nexaStudentLevel: fullUser.nexaStudentLevel,
+        nexaStudentSubject: fullUser.nexaStudentSubject,
+      },
+      day,
+      priorRequests,
+      priorPrompt,
+      priorCompletion,
+    });
+  }
+
+  const mode: NexaMode = "STUDENT";
+  const capability = normalizeCapability(body.capability);
+  const user = fullUser;
   const plan = user.plan;
 
   const nexaAccess = checkUserAccess(
@@ -122,6 +152,8 @@ export async function POST(request: Request) {
       plan: user.plan,
       subscriptionStatus: user.subscriptionStatus,
       subscriptionExpiry: user.subscriptionExpiry,
+      isTrialActive: user.isTrialActive,
+      trialEndsAt: user.trialEndsAt,
     },
     "nexa_access",
     { examsThisUtcWeek: 0, nexaMessagesToday: priorRequests },
@@ -262,6 +294,9 @@ export async function POST(request: Request) {
 
   const subjectLine = `Context — subject: ${subjectForPrompt}; level/grade: ${levelForPrompt}; class/section: ${className}. Tailor explanations to this level.`;
 
+  const nexaCtx = sanitizeNexaContextPayload(body.nexaContext);
+  const productContextLine = nexaCtx ? formatNexaProductContextLine(nexaCtx) : undefined;
+
   const systemContent = buildNexaSystemPrompt({
     mode,
     capability,
@@ -273,6 +308,7 @@ export async function POST(request: Request) {
     studentPersona: studentPersonaFromPlan(plan),
     trainerMemoryLine,
     proSupportMemoryLine,
+    productContextLine,
   });
 
   const messagesForOpenAi: OpenAI.Chat.ChatCompletionMessageParam[] = [

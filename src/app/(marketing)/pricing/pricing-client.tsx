@@ -22,7 +22,7 @@ type UserData = {
   subscriptionExpiry?: string | null;
 };
 
-type PaidPlanKind = Extract<PurchaseKind, "PRO" | "ELITE" | "TOPRANK">;
+type PaidPlanKind = Extract<PurchaseKind, "BASIC" | "PRO" | "ELITE" | "TOPRANK">;
 
 type ModalTarget =
   | { kind: "plan"; plan: PaidPlanKind }
@@ -129,24 +129,30 @@ export function PricingPageClient() {
   const creditBalance = user?.credits ?? 0;
 
   function planModalTitle(plan: PaidPlanKind) {
+    if (plan === "BASIC") return `${PLANS.BASIC.name} — monthly`;
     if (plan === "PRO") return `${PLANS.PRO.name} — ${PLANS.PRO.label}`;
     if (plan === "ELITE") return `${PLANS.ELITE.name} — ${PLANS.ELITE.label}`;
     return `${PLANS.TOPRANK.name} — ${PLANS.TOPRANK.label}`;
   }
 
   function planModalDescription(plan: PaidPlanKind) {
+    if (plan === "BASIC") return PLANS.BASIC.summary;
     if (plan === "PRO") return PLANS.PRO.summary;
     if (plan === "ELITE") return PLANS.ELITE.summary;
     return PLANS.TOPRANK.summary;
   }
 
   function planModalDetail(plan: PaidPlanKind) {
+    if (plan === "BASIC") {
+      return "3 exams per UTC week, 5 Nexa messages per day — billed monthly after your trial ends.";
+    }
     if (plan === "PRO") return `${PLANS.PRO.creditsIncluded.toLocaleString()} AI credits included each billing cycle.`;
     if (plan === "ELITE") return `${PLANS.ELITE.creditsIncluded.toLocaleString()} AI credits included each billing cycle.`;
     return `${PLANS.TOPRANK.creditsIncluded.toLocaleString()} AI credits included each billing cycle.`;
   }
 
   function planModalAmount(plan: PaidPlanKind) {
+    if (plan === "BASIC") return PLANS.BASIC.priceInr;
     if (plan === "PRO") return PLANS.PRO.priceInr;
     if (plan === "ELITE") return PLANS.ELITE.priceInr;
     return PLANS.TOPRANK.priceInr;
@@ -162,8 +168,9 @@ export function PricingPageClient() {
             Plans built for rank outcomes
           </h1>
           <p className="mt-4 max-w-2xl text-base leading-relaxed text-slate-600">
-            Basic is free with quotas. Pro, Elite, and TopRank unlock training loops, Nexa limits, and TopRank hardcore
-            mode. When your paid period ends, you are downgraded to Basic automatically.
+            Basic starts with a 15-day free trial, then ₹{PLANS.BASIC.priceInr}/month. Pro, Elite, and TopRank unlock
+            training loops, higher Nexa limits, and TopRank hardcore mode. When a paid period ends, paid tiers downgrade to
+            Basic until you renew.
           </p>
           {user ? (
             <p className="mt-5 text-sm text-slate-700">
@@ -199,7 +206,7 @@ export function PricingPageClient() {
           {TIER_KEYS.map((key) => {
             const p = PLANS[key];
             const isRecommended = key === recommendedKey;
-            const isCurrentBasic = Boolean(user && key === "BASIC" && user.plan === "BASIC");
+            const isCurrentBasic = Boolean(user && key === "BASIC" && user.plan === "BASIC" && paidActive);
             const isCurrentPaid = Boolean(user && key !== "BASIC" && user.plan === key && paidActive);
             const isCurrent = isCurrentBasic || isCurrentPaid;
 
@@ -231,7 +238,14 @@ export function PricingPageClient() {
                 <p className="mt-1 text-lg font-semibold text-slate-900">{p.name}</p>
                 <p className="mt-3 flex-1 text-sm leading-relaxed text-slate-600">{p.summary}</p>
                 <p className="mt-5 text-2xl font-semibold tabular-nums text-slate-900">
-                  {key === "BASIC" ? "Free" : `₹${p.priceInr}/mo`}
+                  {key === "BASIC" ? (
+                    <>
+                      15-day trial
+                      <span className="mt-1 block text-base font-medium text-slate-600">then ₹{p.priceInr}/mo</span>
+                    </>
+                  ) : (
+                    `₹${p.priceInr}/mo`
+                  )}
                 </p>
                 {key === "BASIC" ? (
                   <p className="text-xs text-slate-500">3 exams / UTC week · 5 Nexa messages / day</p>
@@ -243,9 +257,23 @@ export function PricingPageClient() {
                     Current plan
                   </p>
                 ) : key === "BASIC" ? (
-                  <p className="mt-4 rounded-xl bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700">
-                    Default for new accounts
-                  </p>
+                  !user ? (
+                    <p className="mt-4 rounded-xl bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700">
+                      Sign in and complete onboarding to start your free trial in the app.
+                    </p>
+                  ) : user.plan === "BASIC" && !paidActive ? (
+                    <button
+                      type="button"
+                      className="mt-4 w-full rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+                      onClick={() => setModal({ kind: "plan", plan: "BASIC" })}
+                    >
+                      Subscribe — ₹{PLANS.BASIC.priceInr}/mo
+                    </button>
+                  ) : (
+                    <p className="mt-4 rounded-xl bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700">
+                      Basic is the entry tier after onboarding. Switch plans here if you need more training power.
+                    </p>
+                  )
                 ) : (
                   <button
                     type="button"

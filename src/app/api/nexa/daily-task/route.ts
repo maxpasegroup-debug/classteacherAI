@@ -26,7 +26,13 @@ export async function GET() {
     prisma.trainingState.findUnique({ where: { userId: session.userId } }),
     prisma.user.findUnique({
       where: { id: session.userId },
-      select: { plan: true, subscriptionStatus: true, subscriptionExpiry: true },
+      select: {
+        plan: true,
+        subscriptionStatus: true,
+        subscriptionExpiry: true,
+        isTrialActive: true,
+        trialEndsAt: true,
+      },
     }),
   ]);
 
@@ -42,6 +48,8 @@ export async function GET() {
       plan: user.plan,
       subscriptionStatus: user.subscriptionStatus,
       subscriptionExpiry: user.subscriptionExpiry,
+      isTrialActive: user.isTrialActive,
+      trialEndsAt: user.trialEndsAt,
     },
     "advanced_training",
     { examsThisUtcWeek: 0, nexaMessagesToday: 0 },

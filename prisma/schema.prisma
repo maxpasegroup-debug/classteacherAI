@@ -50,6 +50,18 @@ enum BookingStatus {
   CANCELED
 }
 
+/// TeachX Business dashboard partner / tutor applications (teachers on BUSINESS plan)
+enum TeachxBizAppType {
+  TUTOR_ONE_ON_ONE
+  ROOTSCARE_PARTNER
+}
+
+enum TeachxBizAppStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum ExamType {
   MOCK
   PRACTICE
@@ -60,17 +72,24 @@ model User {
   name                 String
   email                String    @unique
   password             String
+  /// STUDENT | TEACHER — product entry (TeachX vs student app)
+  role                 String    @default("STUDENT")
   /// BASIC | PRO | ELITE | TOPRANK
   plan                 String    @default("BASIC")
   /// ACTIVE | INACTIVE
   subscriptionStatus   String    @default("INACTIVE")
   subscriptionExpiry   DateTime?
+  trialStartDate       DateTime?
+  trialEndsAt          DateTime?
+  isTrialActive        Boolean   @default(false)
   credits              Int       @default(0)
   nexaStudentLevel     String?
   nexaStudentSubject   String?
+  /// TeachX tier: FREE | PRO | BUSINESS (teachers only; independent of student `plan`)
+  teachxPlan           String    @default("FREE")
+  teachxCredits        Int       @default(0)
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
-  passwordResets PasswordResetOtp[]
   conversations  Conversation[]
   transactions   Transaction[]
   teacherProfile TeacherProfile?
@@ -100,6 +119,23 @@ model User {
   studentProfile StudentProfile?
   questionAttempts Attempt[]
   trainingState    TrainingState?
+  teachxBusinessApplications TeachxBusinessApplication[]
+}
+
+model TeachxBusinessApplication {
+  id        String              @id @default(cuid())
+  userId    String
+  type      TeachxBizAppType
+  status    TeachxBizAppStatus  @default(PENDING)
+  /// Form fields (JSON); e.g. tutor profile, pricing, Rootscare interest
+  payload   Json
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
+  @@index([userId, createdAt])
 }
 
 model StudentProfile {
@@ -208,19 +244,16 @@ model NexaStudentMemory {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-model PasswordResetOtp {
-  id         String   @id @default(cuid())
-  userId     String
-  codeHash   String
-  expiresAt  DateTime
-  verifiedAt DateTime?
-  consumedAt DateTime?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+/// Plain OTP row for email reset (short-lived). Deleted after successful reset.
+model PasswordResetOTP {
+  id        String   @id @default(cuid())
+  email     String
+  otp       String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, createdAt])
+  @@index([email, createdAt])
+  @@map("password_reset_otp")
 }
 
 model Conversation {

@@ -1,7 +1,14 @@
-import { handleVerifyOtp } from "@/lib/auth-otp-flow";
+import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-export async function POST(request: Request) {
-  return handleVerifyOtp(request);
+/** Legacy: OTP is verified together with new password on POST /api/auth/reset-password. */
+export async function POST() {
+  return NextResponse.json(
+    {
+      success: false,
+      message: "Use POST /api/auth/reset-password with email, otp, and newPassword.",
+    },
+    { status: 410 },
+  );
 }

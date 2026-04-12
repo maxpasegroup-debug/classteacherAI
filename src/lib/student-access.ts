@@ -36,7 +36,13 @@ export async function requireActiveStudentPlan(userId: string) {
   await applyPlanExpiry(userId);
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { plan: true, subscriptionStatus: true, subscriptionExpiry: true },
+    select: {
+      plan: true,
+      subscriptionStatus: true,
+      subscriptionExpiry: true,
+      isTrialActive: true,
+      trialEndsAt: true,
+    },
   });
   if (!user) {
     return { ok: false as const, code: "NOT_FOUND" as const, error: "User not found." };
@@ -50,11 +56,19 @@ export async function requireActiveStudentPlan(userId: string) {
   return { ok: true as const, user };
 }
 
-function snapshot(u: { plan: string; subscriptionStatus: string; subscriptionExpiry: Date | null }): PlanUserSnapshot {
+function snapshot(u: {
+  plan: string;
+  subscriptionStatus: string;
+  subscriptionExpiry: Date | null;
+  isTrialActive: boolean;
+  trialEndsAt: Date | null;
+}): PlanUserSnapshot {
   return {
     plan: u.plan,
     subscriptionStatus: u.subscriptionStatus,
     subscriptionExpiry: u.subscriptionExpiry,
+    isTrialActive: u.isTrialActive,
+    trialEndsAt: u.trialEndsAt,
   };
 }
 
@@ -62,7 +76,13 @@ export async function requireStudentFeature(userId: string, feature: StudentFeat
   await applyPlanExpiry(userId);
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { plan: true, subscriptionStatus: true, subscriptionExpiry: true },
+    select: {
+      plan: true,
+      subscriptionStatus: true,
+      subscriptionExpiry: true,
+      isTrialActive: true,
+      trialEndsAt: true,
+    },
   });
   if (!user) {
     return { ok: false as const, code: "NOT_FOUND" as const, error: "User not found." };

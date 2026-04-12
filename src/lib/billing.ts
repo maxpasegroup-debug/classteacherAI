@@ -35,11 +35,29 @@ export function basicTrialEnd(from: Date = new Date()) {
 export async function applyPlanExpiry(userId: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { plan: true, subscriptionStatus: true, subscriptionExpiry: true },
+    select: {
+      plan: true,
+      subscriptionStatus: true,
+      subscriptionExpiry: true,
+      isTrialActive: true,
+      trialEndsAt: true,
+    },
   });
-  if (!user?.subscriptionExpiry || user.subscriptionStatus !== "ACTIVE") return user;
+  if (!user) return null;
 
-  if (user.subscriptionExpiry >= new Date()) return user;
+  const now = new Date();
+
+  if (user.isTrialActive && user.trialEndsAt && user.trialEndsAt < now) {
+    await prisma.user.update({
+      where: { id: userId },
+      data: { isTrialActive: false },
+    });
+    user.isTrialActive = false;
+  }
+
+  if (!user.subscriptionExpiry || user.subscriptionStatus !== "ACTIVE") return user;
+
+  if (user.subscriptionExpiry >= now) return user;
 
   if (user.plan === "PRO" || user.plan === "ELITE" || isTopRankPlan(user.plan)) {
     await prisma.user.update({
@@ -49,6 +67,7 @@ export async function applyPlanExpiry(userId: string) {
         subscriptionStatus: "INACTIVE",
         subscriptionExpiry: null,
         credits: 0,
+        isTrialActive: false,
       },
     });
     return {
@@ -56,6 +75,7 @@ export async function applyPlanExpiry(userId: string) {
       plan: "BASIC",
       subscriptionStatus: "INACTIVE",
       subscriptionExpiry: null,
+      isTrialActive: false,
     };
   }
 
@@ -66,6 +86,7 @@ export async function applyPlanExpiry(userId: string) {
         subscriptionStatus: "INACTIVE",
         subscriptionExpiry: null,
         credits: 0,
+        isTrialActive: false,
       },
     });
   }

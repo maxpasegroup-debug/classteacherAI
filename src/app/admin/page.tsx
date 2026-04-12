@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { AdminNexaBossPanel } from "@/components/admin-nexa-boss-panel";
 import { getCurrentSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -26,6 +27,7 @@ export default async function AdminPage() {
         <p className="text-sm text-slate-600">
           Use <code>/api/admin/dashboard</code> with admin email allowlist (<code>ADMIN_EMAILS</code>) to access platform analytics.
         </p>
+        <AdminNexaBossPanel />
       </section>
     </main>
   );

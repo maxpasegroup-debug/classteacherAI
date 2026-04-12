@@ -9,12 +9,12 @@ export const PLANS = {
   BASIC: {
     key: "BASIC" as const,
     name: "Basic",
-    label: "Free",
-    priceInr: 0,
+    label: "Trial + Basic",
+    priceInr: 199,
     creditsIncluded: 0,
     aiEnabled: true,
     summary:
-      "Start free: limited exams per week, 5 Nexa messages per day, core analytics. Upgrade for adaptive training and full coaching.",
+      "15-day free trial, then ₹199/month: limited exams per week, 5 Nexa messages per day, core analytics. Upgrade for adaptive training and full coaching.",
   },
   PRO: {
     key: "PRO" as const,
@@ -121,7 +121,7 @@ export const CREDIT_TOP_UP_PACKS = {
 } as const;
 
 export const AI_ACCESS_RULES = [
-  "Basic (free): 3 exam starts per UTC week, 5 Nexa messages per day — no paid subscription required.",
+  "Basic: 15-day free trial or paid Basic — 3 exam starts per UTC week, 5 Nexa messages per day.",
   "Pro: active subscription, 10 exams per week, adaptive training + Nexa (50 messages/day) with credits and token caps.",
   "Elite: active subscription, unlimited exams, full Nexa allowance, adaptive system.",
   "TopRank: active subscription, unlimited exams, hardcore TopRank loop, highest Nexa allowance.",

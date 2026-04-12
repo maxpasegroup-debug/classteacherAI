@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { signSessionToken } from "@/lib/auth";
+import { applySessionCookieToResponse, signSessionToken } from "@/lib/auth";
 import { authJsonError } from "@/lib/auth-responses";
 import { applyPlanExpiry } from "@/lib/billing";
 import { comparePassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
+import { resolvePostAuthRedirect } from "@/lib/post-auth-redirect";
 import { loginSchema } from "@/lib/validators";
 
 export const runtime = "nodejs";
@@ -49,6 +50,12 @@ export async function POST(req: Request) {
         id: true,
         name: true,
         email: true,
+        plan: true,
+        role: true,
+        subscriptionStatus: true,
+        subscriptionExpiry: true,
+        isTrialActive: true,
+        trialEndsAt: true,
         studentProfile: { select: { onboardingCompleted: true } },
       },
     });
@@ -57,16 +64,34 @@ export async function POST(req: Request) {
     }
 
     const onboardingCompleted = Boolean(refreshed.studentProfile?.onboardingCompleted);
-    const token = signSessionToken({ userId: refreshed.id, onboardingCompleted });
-
-    const response = NextResponse.json({ success: true });
-    response.cookies.set("ctai_session", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
+    const appRole = refreshed.role === "TEACHER" ? "TEACHER" : "STUDENT";
+    const token = signSessionToken({
+      userId: refreshed.id,
+      onboardingCompleted,
+      role: appRole,
     });
-    return response;
+    const redirectTo = resolvePostAuthRedirect(onboardingCompleted, {
+      plan: refreshed.plan,
+      subscriptionStatus: refreshed.subscriptionStatus,
+      subscriptionExpiry: refreshed.subscriptionExpiry,
+      isTrialActive: refreshed.isTrialActive,
+      trialEndsAt: refreshed.trialEndsAt,
+      role: appRole,
+    });
+
+    const res = NextResponse.json({
+      success: true,
+      authenticated: true,
+      user: {
+        id: refreshed.id,
+        name: refreshed.name,
+        email: refreshed.email,
+        role: appRole,
+      },
+      redirectTo,
+    });
+    applySessionCookieToResponse(res, token);
+    return res;
   } catch (error) {
     console.error("AUTH ERROR:", error);
     return authJsonError("Something went wrong. Please try again.", 500);

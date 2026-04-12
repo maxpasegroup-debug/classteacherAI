@@ -46,9 +46,9 @@ export function PasswordField({
           title={visible ? "Hide password" : "Show password"}
           onClick={() => setVisible((v) => !v)}
           disabled={disabled}
-          className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-lg px-2 py-1 text-base leading-none text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50"
         >
-          <span aria-hidden="true">👁️</span>
+          {visible ? "Hide" : "Show"}
         </button>
       </div>
     </div>

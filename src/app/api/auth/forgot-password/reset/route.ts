@@ -1,7 +1,7 @@
-import { handleResetPassword } from "@/lib/auth-otp-flow";
+import { resetPasswordWithOtpRequest } from "@/lib/password-reset-otp-service";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
-  return handleResetPassword(request);
+  return resetPasswordWithOtpRequest(request);
 }
