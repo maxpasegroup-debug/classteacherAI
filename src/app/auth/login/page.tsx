@@ -11,34 +11,42 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(event: FormEvent) {
-    event.preventDefault();
+  const handleLogin = async (e: FormEvent) => {
+    e.preventDefault();
     setLoading(true);
     setError("");
 
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+          password,
+        }),
         credentials: "include",
       });
-      const data = await res.json();
-      console.log("Login response:", data);
 
-      if (!res.ok || !data.success) {
-        setError(data.message ?? data.error ?? "Login failed.");
+      const data = await res.json();
+      console.log("LOGIN RESPONSE:", data);
+
+      if (data.success) {
+        window.location.href = "/dashboard";
         return;
       }
 
-      const dest = typeof data.redirectTo === "string" ? data.redirectTo : "/dashboard";
-      window.location.href = dest;
+      const msg = data.message || "Login failed";
+      alert(msg);
+      setError(msg);
     } catch {
+      alert("Network error. Please try again.");
       setError("Network error. Please try again.");
     } finally {
       setLoading(false);
     }
-  }
+  };
 
   return (
     <AuthShell
@@ -53,7 +61,7 @@ export default function LoginPage() {
         </>
       }
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleLogin} className="space-y-4">
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">Email</label>
           <input
@@ -75,7 +83,7 @@ export default function LoginPage() {
           disabled={loading}
           className="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-60"
         >
-          {loading ? "Signing in..." : "Sign in"}
+          {loading ? "Signing in..." : "Login"}
         </button>
       </form>
     </AuthShell>

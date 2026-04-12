@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { applySessionCookieToResponse, signSessionToken } from "@/lib/auth";
+import { signSessionToken } from "@/lib/auth";
 import { authJsonError } from "@/lib/auth-responses";
 import { applyPlanExpiry } from "@/lib/billing";
 import { comparePassword } from "@/lib/password";
@@ -59,17 +59,14 @@ export async function POST(req: Request) {
     const onboardingCompleted = Boolean(refreshed.studentProfile?.onboardingCompleted);
     const token = signSessionToken({ userId: refreshed.id, onboardingCompleted });
 
-    const res = NextResponse.json({
-      success: true,
-      user: {
-        id: refreshed.id,
-        name: refreshed.name,
-        email: refreshed.email,
-      },
-      redirectTo: onboardingCompleted ? "/dashboard" : "/onboarding",
+    const response = NextResponse.json({ success: true });
+    response.cookies.set("ctai_session", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
     });
-    applySessionCookieToResponse(res, token);
-    return res;
+    return response;
   } catch (error) {
     console.error("AUTH ERROR:", error);
     return authJsonError("Something went wrong. Please try again.", 500);
