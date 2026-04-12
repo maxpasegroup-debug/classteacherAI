@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getCurrentSession } from "@/lib/auth";
+import { getCurrentSession, setSessionCookie, signSessionToken } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { OnboardingChatClient } from "@/components/onboarding-chat-client";
 
@@ -13,6 +13,8 @@ export default async function OnboardingPage() {
   });
 
   if (profile?.onboardingCompleted) {
+    const token = signSessionToken({ userId: session.userId, onboardingCompleted: true });
+    await setSessionCookie(token);
     redirect("/dashboard");
   }
 

@@ -47,6 +47,8 @@ export default async function TopRankTrainingPage() {
   }
 
   return (
-    <TopRankHubClient plan={user.plan} paidTopRank={paidTopRank} initialVision={initialVision} />
+    <div className="rounded-2xl border border-amber-500/20 bg-black/90 p-3 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.08)] sm:p-4">
+      <TopRankHubClient plan={user.plan} paidTopRank={paidTopRank} initialVision={initialVision} />
+    </div>
   );
 }

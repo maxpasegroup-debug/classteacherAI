@@ -23,6 +23,12 @@ import {
 import { logAi } from "@/lib/logger";
 import { buildProSupportMemoryLine } from "@/lib/nexa-pro-context";
 import { buildNexaSystemPrompt, studentPersonaFromPlan } from "@/lib/nexa-personas";
+import {
+  accessDeniedResponse,
+  BASIC_NEXA_MESSAGES_PER_DAY,
+  checkUserAccess,
+  PRO_NEXA_MESSAGES_PER_DAY,
+} from "@/lib/plan-access";
 import { isTopRankPlan } from "@/lib/plan-tier";
 
 export const runtime = "nodejs";
@@ -53,7 +59,7 @@ const capabilityGuide: Record<NexaCapability, string> = {
   CONCEPT_TEACHING:
     "Task: Concept teaching. Build from intuition to formal idea, use analogies, examples, and a mini practice check; adapt depth to the student's level.",
   EXAM_TIPS:
-    "Task: Exam tips. Give revision strategy, time management, common pitfalls, and quick drills—prioritize what helps in tests for their level and subject.",
+    "Task: Rank / exam conditioning. Pacing, skip strategy, trap patterns, weak-topic locks, and the next timed mock they must run — rank outcome first.",
   CONTENT_CREATION:
     "Task: Content creation. Produce classroom-ready materials: prompts, items, rubrics, or handouts; keep tone professional and reusable.",
 };
@@ -95,24 +101,9 @@ export async function POST(request: Request) {
     },
   });
   if (!user) {
-    return NextResponse.json({ error: "User not found.", code: "NOT_FOUND" }, { status: 404 });
-  }
-
-  if (user.subscriptionStatus !== "ACTIVE" || !user.subscriptionExpiry || user.subscriptionExpiry < new Date()) {
-    logAi("nexa_blocked", { userId: session.userId, reason: "EXPIRED" });
     return NextResponse.json(
-      { error: "Your plan period has ended. Renew to use Nexa.", code: "EXPIRED" },
-      { status: 403 },
-    );
-  }
-
-  const plan = user.plan;
-
-  if (plan === "BASIC") {
-    logAi("nexa_blocked", { userId: session.userId, reason: "BASIC_STUDENT" });
-    return NextResponse.json(
-      { error: "Nexa AI is not available on Starter. Upgrade to Pro, Elite, or TopRank.", code: "PLAN" },
-      { status: 403 },
+      { success: false, upgradeRequired: false, message: "User not found.", error: "User not found.", code: "NOT_FOUND" },
+      { status: 404 },
     );
   }
 
@@ -124,29 +115,72 @@ export async function POST(request: Request) {
   const priorPrompt = usageRow?.aiTokensPrompt ?? 0;
   const priorCompletion = usageRow?.aiTokensCompletion ?? 0;
 
+  const plan = user.plan;
+
+  const nexaAccess = checkUserAccess(
+    {
+      plan: user.plan,
+      subscriptionStatus: user.subscriptionStatus,
+      subscriptionExpiry: user.subscriptionExpiry,
+    },
+    "nexa_access",
+    { examsThisUtcWeek: 0, nexaMessagesToday: priorRequests },
+  );
+  if (!nexaAccess.ok) {
+    logAi("nexa_blocked", { userId: session.userId, reason: nexaAccess.code });
+    return accessDeniedResponse(nexaAccess);
+  }
+
   let deductCredits = false;
   let dailyCap = PAID_DAILY_AI_CAP;
+  if (plan === "BASIC") {
+    dailyCap = BASIC_NEXA_MESSAGES_PER_DAY;
+  } else if (plan === "PRO") {
+    dailyCap = PRO_NEXA_MESSAGES_PER_DAY;
+  }
 
   if (plan === "PRO" || plan === "ELITE") {
     const gate = await assertCanUseAi(session.userId);
     if (!gate.ok) {
       logAi("nexa_blocked", { userId: session.userId, reason: gate.code });
       return NextResponse.json(
-        { error: gate.error, code: gate.code },
+        {
+          success: false,
+          upgradeRequired: true,
+          message: gate.error,
+          error: gate.error,
+          code: gate.code,
+        },
         { status: gate.code === "CREDITS" ? 402 : 403 },
       );
     }
     deductCredits = true;
+  } else if (plan === "BASIC") {
+    deductCredits = false;
   } else if (isTopRankPlan(plan)) {
     dailyCap = TOPRANK_DAILY_AI_CAP;
     deductCredits = false;
   } else {
-    return NextResponse.json({ error: "Invalid plan for Nexa.", code: "PLAN" }, { status: 403 });
+    return NextResponse.json(
+      {
+        success: false,
+        upgradeRequired: true,
+        message: "Invalid plan for Nexa.",
+        error: "Invalid plan for Nexa.",
+        code: "PLAN",
+      },
+      { status: 403 },
+    );
   }
 
   if (priorRequests >= dailyCap) {
     logAi("nexa_daily_cap", { userId: session.userId });
-    return NextResponse.json({ error: "Daily AI usage limit reached.", code: "RATE_LIMIT" }, { status: 429 });
+    return accessDeniedResponse({
+      ok: false,
+      upgradeRequired: true,
+      message: "Daily Nexa limit reached. Upgrade to continue.",
+      code: "RATE_LIMIT",
+    });
   }
 
   const userRow = await prisma.user.findUnique({
@@ -253,7 +287,7 @@ export async function POST(request: Request) {
     messagesForOpenAi.map((m) => ({ content: typeof m.content === "string" ? m.content : "" })),
   );
 
-  if (plan === "PRO" || plan === "ELITE" || isTopRankPlan(plan)) {
+  if (plan === "BASIC" || plan === "PRO" || plan === "ELITE" || isTopRankPlan(plan)) {
     const tokenGate = assertWithinDailyTokenBudget({
       plan,
       priorPromptTokens: priorPrompt,
@@ -269,12 +303,16 @@ export async function POST(request: Request) {
         projected: tokenGate.reason === "TOKEN_DAILY_CAP" ? tokenGate.projectedTotal : undefined,
       });
       const status = tokenGate.reason === "NO_AI" ? 403 : 429;
+      const msg =
+        tokenGate.reason === "TOKEN_DAILY_CAP"
+          ? "Daily AI token limit reached. Try again tomorrow or upgrade."
+          : "AI is not available on this plan.";
       return NextResponse.json(
         {
-          error:
-            tokenGate.reason === "TOKEN_DAILY_CAP"
-              ? "Daily AI token limit reached. Try again tomorrow or contact support."
-              : "AI is not available on this plan.",
+          success: false,
+          upgradeRequired: true,
+          message: msg,
+          error: msg,
           code: tokenGate.reason === "TOKEN_DAILY_CAP" ? "TOKEN_LIMIT" : "PLAN",
         },
         { status },
@@ -286,7 +324,16 @@ export async function POST(request: Request) {
     const deducted = await deductAiCredits(session.userId, AI_REQUEST_CREDIT_COST);
     if (!deducted) {
       logAi("nexa_deduct_failed", { userId: session.userId });
-      return NextResponse.json({ error: "Upgrade plan or buy credits", code: "CREDITS" }, { status: 402 });
+      return NextResponse.json(
+        {
+          success: false,
+          upgradeRequired: true,
+          message: "Upgrade plan or buy credits.",
+          error: "Upgrade plan or buy credits",
+          code: "CREDITS",
+        },
+        { status: 402 },
+      );
     }
   }
 

@@ -98,23 +98,20 @@ model User {
   performanceDailySnapshots PerformanceDailySnapshot[]
   performanceInsightRecords PerformanceInsightRecord[]
   studentProfile StudentProfile?
+  questionAttempts Attempt[]
+  trainingState    TrainingState?
 }
 
 model StudentProfile {
   id                  String   @id @default(cuid())
-  userId               String   @unique
-  exam                 String
-  targetRank           Int
-  level                String
-  studyHours           Int
-  weakness             String
-  onboardingCompleted  Boolean  @default(false)
-  trainingIntensity    String
-  recommendedDailyQuestions Int
-  weakAreaFocus        String
-  difficultyStartLevel Int
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  userId              String   @unique
+  exam                String
+  targetRank          String
+  level               String
+  studyHours          Int
+  weakness            String
+  onboardingCompleted Boolean  @default(false)
+  createdAt           DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -326,14 +323,28 @@ model EarningLedger {
 model StudentPerformance {
   id         String   @id @default(cuid())
   studentId  String
+  /// Catalog exam id, or synthetic key e.g. question-bank:NEET for bank attempts.
+  examId     String?
+  /// Idempotent tie to ExamAttempt.id or Attempt.id.
+  attemptId  String?  @unique
   subject    String
+  /// Normalized points or accuracy % (legacy rows may only have this).
   score      Float
+  accuracy   Float?
+  timeTaken  Int?
+  /// 1 = best in peer pool for this exam key at snapshot time.
+  rank       Int?
+  /// Approx. % of peers at or below this accuracy (0–100).
+  percentile Float?
+  /// { weakTopics: string[], speedIssues: string[], accuracyProblems: string[] }
+  analysis   Json     @default("{}")
   weakAreas  String[]
   createdAt  DateTime @default(now())
 
   student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@index([studentId, createdAt])
+  @@index([examId, createdAt])
 }
 
 model QuestionBank {
@@ -345,6 +356,66 @@ model QuestionBank {
   answer      String
   explanation String?
   createdAt   DateTime @default(now())
+}
+
+/// Structured bank item for TopRank exam engine (MCQ with metadata).
+model Question {
+  id            String   @id @default(cuid())
+  exam          String
+  subject       String
+  topic         String
+  subtopic      String
+  difficulty    String
+  type          String
+  questionText  String
+  options       Json
+  correctAnswer String
+  explanation   String
+  expectedTime  Int
+  marks         Int
+  negativeMarks Int
+  createdAt     DateTime @default(now())
+
+  attemptItems AttemptQuestion[]
+
+  @@index([exam, subject])
+  @@index([topic])
+  @@index([difficulty])
+}
+
+/// Graded exam session against `Question` bank (distinct from legacy `ExamAttempt`).
+model Attempt {
+  id             String    @id @default(cuid())
+  userId         String
+  exam           String
+  subject        String
+  mode           String
+  questionIds    String[]
+  score          Int       @default(0)
+  total          Int
+  accuracy       Float     @default(0)
+  timeTaken      Int       @default(0)
+  allowedSeconds Int?
+  submittedAt    DateTime?
+  createdAt      DateTime  @default(now())
+
+  user  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items AttemptQuestion[]
+
+  @@index([userId, createdAt])
+}
+
+model AttemptQuestion {
+  id         String  @id @default(cuid())
+  attemptId  String
+  questionId String
+  selected   String
+  isCorrect  Boolean
+
+  attempt  Attempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([attemptId])
 }
 
 model Exam {
@@ -393,6 +464,23 @@ model TopRankVisionBoard {
   envDailySchedule    Boolean @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// TopRank conditioning loop — topic memory + difficulty (exam engine integration).
+model TrainingState {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  level        String   @default("Average")
+  intensity    String   @default("Medium")
+  weakTopics   Json     @default("[]")
+  strongTopics Json     @default("[]")
+  lastScore    Int?
+  lastAccuracy Float?
+  lastExam     String?
+  lastSubject  String?
+  updatedAt    DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

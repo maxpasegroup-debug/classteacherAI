@@ -4,10 +4,11 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { isTopRankPlan } from "@/lib/plan-tier";
 import { CardUI } from "@/components/card-ui";
-import { ExamTakingView, type ExamAttemptPayload } from "@/components/exam-taking-view";
+import { ExamTakingView, type ExamAttemptPayload, type StartedQuestion } from "@/components/exam-taking-view";
 import { RootCareFunnelNudge } from "@/components/rootcare-funnel-nudge";
 import { Top10TrainingCamp } from "@/components/top10-training-camp";
 import { TopRankAchieversBoard } from "@/components/toprank-achievers-board";
+import { UpgradeGateModal } from "@/components/upgrade-gate-modal";
 import { EmptyState, ErrorState, InlineNotice, LoadingState } from "@/components/ui-states";
 
 type ExamItem = {
@@ -39,18 +40,52 @@ type TrainingLoopPayload = {
   nextRecommendedExam: NextRecommendedExam;
 };
 
+type QuestionReviewRow = {
+  questionId: string;
+  isCorrect: boolean;
+  selected: string;
+  correctAnswer: string;
+  explanation: string;
+  questionText: string;
+  marksAwarded: number;
+};
+
+type RankCoachResult = {
+  whatWentWrong: string;
+  whatToFix: string;
+  nextAction: string;
+};
+
+type TrainingSnapshot = {
+  level: string;
+  intensity: string;
+  topWeak: string[];
+  topStrong: string[];
+  lastAccuracy: number | null;
+  lastScore: number | null;
+  focusMode?: boolean;
+  focusTopic?: string;
+  focusReason?: string;
+};
+
 type SubmitResult = {
+  ok?: boolean;
   score: number;
   maxScore: number;
   accuracyPct: number;
   timeSpentSec: number;
   isTimeExceeded: boolean;
+  engine?: string;
+  questionReview?: QuestionReviewRow[];
+  rankCoach?: RankCoachResult;
+  trainingSnapshot?: TrainingSnapshot;
   trainerDebrief?: TrainerDebrief;
   trainingLoop?: TrainingLoopPayload;
 };
 
 type AttemptHistory = {
   id: string;
+  engine?: string;
   examId: string;
   score: number;
   maxScore: number;
@@ -66,9 +101,11 @@ type TrainingModeChoice = "select" | "practice" | "advanced" | "top10";
 type Props = {
   exams: ExamItem[];
   plan: string;
+  /** Matches structured `Question.exam` (e.g. NEET, JEE) for bank selection. */
+  defaultExamTrack?: string | null;
 };
 
-export function StudentExamsClient({ exams, plan }: Props) {
+export function StudentExamsClient({ exams, plan, defaultExamTrack }: Props) {
   /** Default to practice so leaderboard and exam flow are one tap away. */
   const [trainingMode, setTrainingMode] = useState<TrainingModeChoice>("practice");
   const [selectedExamId, setSelectedExamId] = useState(exams[0]?.id ?? "");
@@ -85,11 +122,23 @@ export function StudentExamsClient({ exams, plan }: Props) {
   const [historyError, setHistoryError] = useState("");
 
   const [feedback, setFeedback] = useState("");
+  const [loopLoading, setLoopLoading] = useState(false);
+  const [dailyTask, setDailyTask] = useState<string | null>(null);
+  const [dailyPush, setDailyPush] = useState<string | null>(null);
+  const [activeLoopMeta, setActiveLoopMeta] = useState<{ focusMode?: boolean; focusTopic?: string } | null>(null);
   const [rootcareRefresh, setRootcareRefresh] = useState(0);
   /** Topic-wise drill: keyword matched in question / explanation text. */
   const [topicFocus, setTopicFocus] = useState("");
   /** Pull easy / medium / hard into one session. */
   const [mixedDifficulty, setMixedDifficulty] = useState(true);
+  const [upgradeGate, setUpgradeGate] = useState<{
+    open: boolean;
+    message: string;
+    variant?: "default" | "toprank";
+  }>({ open: false, message: "" });
+  const [postSubmitRank, setPostSubmitRank] = useState<{ rank: number | null; percentile: number | null } | null>(
+    null,
+  );
 
   const selectedExam = useMemo(
     () => exams.find((exam) => exam.id === selectedExamId) ?? null,
@@ -121,6 +170,60 @@ export function StudentExamsClient({ exams, plan }: Props) {
   }, [loadAttempts]);
 
   useEffect(() => {
+    if (!result) {
+      setPostSubmitRank(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/performance");
+        const data = (await res.json().catch(() => ({}))) as {
+          success?: boolean;
+          overview?: { rank?: number | null; percentile?: number | null };
+        };
+        if (cancelled || !data.success) return;
+        setPostSubmitRank({
+          rank: data.overview?.rank ?? null,
+          percentile: data.overview?.percentile ?? null,
+        });
+      } catch {
+        if (!cancelled) setPostSubmitRank(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [result]);
+
+  useEffect(() => {
+    if (trainingMode !== "practice" && trainingMode !== "advanced") return;
+    void fetch("/api/nexa/daily-task")
+      .then(async (r) => {
+        const d = (await r.json().catch(() => ({}))) as {
+          task?: string;
+          continuousPush?: string;
+          upgradeRequired?: boolean;
+          message?: string;
+        };
+        if (!r.ok) {
+          if (d.upgradeRequired && typeof d.message === "string") {
+            setUpgradeGate({ open: true, message: d.message, variant: "toprank" });
+          }
+          setDailyTask(null);
+          setDailyPush(null);
+          return;
+        }
+        setDailyTask(typeof d.task === "string" ? d.task : null);
+        setDailyPush(typeof d.continuousPush === "string" ? d.continuousPush : null);
+      })
+      .catch(() => {
+        setDailyTask(null);
+        setDailyPush(null);
+      });
+  }, [trainingMode, rootcareRefresh, result]);
+
+  useEffect(() => {
     if (!currentAttempt) return;
     const timer = window.setInterval(() => {
       const left = Math.max(
@@ -138,6 +241,70 @@ export function StudentExamsClient({ exams, plan }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [secondsLeft, currentAttempt, isSubmitting]);
 
+  const fetchTrainingNext = useCallback(
+    async (daily: boolean) => {
+      if (!selectedExam) {
+        setRunError("Select an exam paper first (subject is used for the loop).");
+        return;
+      }
+      setRunError("");
+      setFeedback("");
+      setResult(null);
+      setLoopLoading(true);
+      setIsSubmitting(false);
+      try {
+        const res = await fetch("/api/training/next", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            daily,
+            exam: defaultExamTrack?.trim() || undefined,
+            subject: selectedExam.subject,
+          }),
+        });
+        const data = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          message?: string;
+          upgradeRequired?: boolean;
+        };
+        if (!res.ok) {
+          const msg = data.message ?? data.error ?? "Could not start conditioning loop.";
+          setRunError(msg);
+          if (data.upgradeRequired) setUpgradeGate({ open: true, message: msg, variant: "toprank" });
+          return;
+        }
+        const started = data as ExamAttemptPayload & {
+          engine?: string;
+          questions: StartedQuestion[];
+          trainingMeta?: { mix?: { focusMode?: boolean; focusTopic?: string } };
+        };
+        setCurrentAttempt({
+          attemptId: started.attemptId,
+          exam: started.exam,
+          questions: started.questions,
+          deadlineAt: started.deadlineAt,
+          durationSec: started.durationSec,
+          sessionMeta: started.sessionMeta,
+        });
+        const mix = started.trainingMeta?.mix;
+        setActiveLoopMeta(mix?.focusMode ? { focusMode: true, focusTopic: mix.focusTopic } : null);
+        setAnswers({});
+        setActiveQuestionIndex(0);
+        setSecondsLeft(Math.max(0, Math.floor((new Date(started.deadlineAt).getTime() - Date.now()) / 1000)));
+        setFeedback(
+          daily
+            ? "Training loop started — adaptive mix from your topic memory."
+            : "Weak-area fix set ready — stay sharp.",
+        );
+      } catch {
+        setRunError("Network error while starting the training loop.");
+      } finally {
+        setLoopLoading(false);
+      }
+    },
+    [defaultExamTrack, selectedExam],
+  );
+
   async function startExam(examIdOverride?: string) {
     const examId = examIdOverride ?? selectedExamId;
     if (!examId) {
@@ -152,6 +319,7 @@ export function StudentExamsClient({ exams, plan }: Props) {
     setRunError("");
     setFeedback("");
     setResult(null);
+    setActiveLoopMeta(null);
     setIsSubmitting(false);
     try {
       const res = await fetch("/api/exam/start", {
@@ -159,18 +327,26 @@ export function StudentExamsClient({ exams, plan }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           examId,
+          exam: defaultExamTrack?.trim() || undefined,
           trainingMode: trainingMode === "practice" ? "practice" : "advanced",
           topicFocus: topicFocus.trim() || null,
           mixedDifficulty,
         }),
       });
-      const data = await res.json().catch(() => ({}));
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        message?: string;
+        upgradeRequired?: boolean;
+      };
       if (!res.ok) {
-        setRunError(data.error ?? "Could not start exam.");
+        const msg = data.message ?? data.error ?? "Could not start exam.";
+        setRunError(msg);
+        if (data.upgradeRequired) setUpgradeGate({ open: true, message: msg, variant: "toprank" });
         return;
       }
-      const started = data as ExamAttemptPayload;
+      const started = data as ExamAttemptPayload & { engine?: string; questions: StartedQuestion[] };
       setCurrentAttempt(started);
+      setActiveLoopMeta(null);
       setAnswers({});
       setActiveQuestionIndex(0);
       setSecondsLeft(Math.max(0, Math.floor((new Date(started.deadlineAt).getTime() - Date.now()) / 1000)));
@@ -190,10 +366,18 @@ export function StudentExamsClient({ exams, plan }: Props) {
         questionId: q.id,
         answer: answers[q.id] ?? "",
       }));
+      const elapsedSec = Math.max(
+        0,
+        currentAttempt.durationSec - Math.max(0, secondsLeft),
+      );
       const res = await fetch("/api/exam/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ attemptId: currentAttempt.attemptId, answers: payloadAnswers }),
+        body: JSON.stringify({
+          attemptId: currentAttempt.attemptId,
+          answers: payloadAnswers,
+          timeTakenSec: elapsedSec,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -204,6 +388,7 @@ export function StudentExamsClient({ exams, plan }: Props) {
       await loadAttempts();
       setRootcareRefresh((k) => k + 1);
       setCurrentAttempt(null);
+      setActiveLoopMeta(null);
       if (!autoSubmit) setSecondsLeft(0);
       setFeedback(autoSubmit ? "Time was up, so your attempt was auto-submitted." : "Exam submitted successfully.");
     } catch {
@@ -331,11 +516,50 @@ export function StudentExamsClient({ exams, plan }: Props) {
       {trainingMode === "practice" || trainingMode === "advanced" ? (
         <CardUI
           variant="elite"
+          title="TopRank conditioning loop"
+          description="Test → analyze → fix → re-test. The next set weights weak topics, review, and strengths."
+        >
+          <p className="text-sm text-slate-600">
+            Start Training builds the next timed round automatically from your profile and last results — no paper picker.
+            Requires structured questions in the bank for your exam track and subject.
+          </p>
+          <button
+            type="button"
+            disabled={Boolean(currentAttempt) || loopLoading}
+            onClick={() => void fetchTrainingNext(true)}
+            className="mt-3 w-full rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm disabled:opacity-50 sm:w-auto"
+          >
+            {loopLoading ? "Building…" : "Start training"}
+          </button>
+          {isTopRankPlan(plan) ? (
+            <p className="mt-2 text-[11px] font-medium uppercase tracking-wide text-amber-900/80">
+              TopRank plan: more items, higher intensity mix, tighter timer.
+            </p>
+          ) : null}
+          {dailyTask ? (
+            <div className="mt-4 rounded-xl border border-amber-200/60 bg-amber-50/90 px-3 py-2 text-sm text-amber-950">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-900/80">Daily task</p>
+              <p className="mt-1 font-medium leading-snug">{dailyTask}</p>
+              {dailyPush ? <p className="mt-2 text-xs text-amber-900/85">{dailyPush}</p> : null}
+            </div>
+          ) : null}
+        </CardUI>
+      ) : null}
+
+      {trainingMode === "practice" || trainingMode === "advanced" ? (
+        <CardUI
+          variant="elite"
           title="Session"
           description={`${trainingMode === "practice" ? "Practice" : "Advanced"} — timer on, instant scoring.`}
         >
           {feedback ? <InlineNotice tone="success">{feedback}</InlineNotice> : null}
           {runError ? <InlineNotice tone="error">{runError}</InlineNotice> : null}
+          {currentAttempt && activeLoopMeta?.focusMode ? (
+            <InlineNotice tone="error">
+              Focus Mode{activeLoopMeta.focusTopic ? ` — "${activeLoopMeta.focusTopic}"` : ""}: isolation set. Repeat
+              until accuracy holds; no topic-hopping.
+            </InlineNotice>
+          ) : null}
           {!currentAttempt ? (
             <div className="space-y-3">
               <div className="flex flex-wrap items-end gap-2">
@@ -417,6 +641,37 @@ export function StudentExamsClient({ exams, plan }: Props) {
             title="Results"
             description="Auto evaluation — score, accuracy, weak topics, and your next paper."
           >
+            <div className="mb-4 space-y-3 rounded-xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50 to-white p-4">
+              {postSubmitRank?.rank != null ? (
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-800/90">Your peer rank</p>
+                  <p className="text-2xl font-bold text-slate-900">#{postSubmitRank.rank}</p>
+                  {postSubmitRank.percentile != null ? (
+                    <p className="text-xs text-slate-600">~{Math.round(postSubmitRank.percentile)}th percentile vs peers</p>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500">Rank updates after we sync your attempt…</p>
+              )}
+              {result.trainingLoop?.weakAreas?.length ? (
+                <div>
+                  <p className="text-[10px] font-semibold uppercase text-amber-900/90">Weak signals</p>
+                  <ul className="mt-1 list-inside list-disc text-sm text-slate-800">
+                    {result.trainingLoop.weakAreas.slice(0, 3).map((w) => (
+                      <li key={w}>{w}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              <button
+                type="button"
+                disabled={Boolean(currentAttempt)}
+                onClick={() => void startExam(continueTrainingTarget?.id || selectedExamId)}
+                className="w-full rounded-xl bg-slate-900 py-3.5 text-sm font-bold text-white shadow-md transition hover:bg-slate-800 disabled:opacity-50"
+              >
+                Start next challenge →
+              </button>
+            </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="rounded-lg border border-slate-100 p-3">
                 <p className="text-xs text-slate-500">Score</p>
@@ -439,6 +694,82 @@ export function StudentExamsClient({ exams, plan }: Props) {
                 </p>
               </div>
             </div>
+            {result.trainingSnapshot ? (
+              <div className="mt-3 rounded-xl border border-violet-100 bg-violet-50/60 p-3 text-sm text-slate-800">
+                <p className="text-xs font-semibold uppercase tracking-wide text-violet-800">Conditioning state</p>
+                <p className="mt-1">
+                  Level <span className="font-semibold">{result.trainingSnapshot.level}</span> · Intensity{" "}
+                  <span className="font-semibold">{result.trainingSnapshot.intensity}</span>
+                </p>
+                {result.trainingSnapshot.topWeak.length > 0 ? (
+                  <p className="mt-2 text-xs text-slate-700">
+                    <span className="font-semibold">Weak focus:</span> {result.trainingSnapshot.topWeak.join(", ")}
+                  </p>
+                ) : null}
+                {result.trainingSnapshot.focusMode ? (
+                  <p className="mt-2 text-xs font-semibold text-red-700">
+                    Focus Mode active
+                    {result.trainingSnapshot.focusTopic ? ` → ${result.trainingSnapshot.focusTopic}` : ""}.
+                    {result.trainingSnapshot.focusReason ? ` ${result.trainingSnapshot.focusReason}` : ""}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+            {result.rankCoach ? (
+              <div className="mt-4 rounded-xl border border-slate-200 bg-slate-900 px-4 py-3 text-slate-100">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-200/90">
+                  Nexa — rank coach debrief
+                </p>
+                <p className="mt-2 text-[10px] font-semibold uppercase text-red-300/90">What went wrong</p>
+                <p className="mt-1 text-sm leading-relaxed text-slate-100">{result.rankCoach.whatWentWrong}</p>
+                <p className="mt-3 text-[10px] font-semibold uppercase text-amber-100/90">What to fix</p>
+                <p className="mt-1 text-sm text-slate-100">{result.rankCoach.whatToFix}</p>
+                <p className="mt-3 text-[10px] font-semibold uppercase text-emerald-300/90">Next action — no idle</p>
+                <p className="mt-1 text-sm font-medium text-white">{result.rankCoach.nextAction}</p>
+              </div>
+            ) : null}
+            {result.engine === "bank" ? (
+              <div className="mt-4">
+                <button
+                  type="button"
+                  disabled={loopLoading}
+                  onClick={() => void fetchTrainingNext(false)}
+                  className="w-full rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-md disabled:opacity-50 sm:w-auto"
+                >
+                  {loopLoading ? "Preparing…" : "Fix weak areas → next test"}
+                </button>
+              </div>
+            ) : null}
+            {result.questionReview && result.questionReview.length > 0 ? (
+              <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Question review</p>
+                <ul className="max-h-[min(70vh,28rem)] space-y-3 overflow-y-auto pr-1">
+                  {result.questionReview.map((row, idx) => (
+                    <li
+                      key={row.questionId}
+                      className={`rounded-xl border p-3 text-sm ${
+                        row.isCorrect ? "border-emerald-100 bg-emerald-50/50" : "border-red-100 bg-red-50/40"
+                      }`}
+                    >
+                      <p className="text-[11px] font-semibold text-slate-500">Q{idx + 1}</p>
+                      <p className="mt-1 font-medium text-slate-900">{row.questionText}</p>
+                      <p className="mt-2 text-xs text-slate-700">
+                        <span className="font-semibold">Your answer:</span> {row.selected || "—"}
+                      </p>
+                      {!row.isCorrect ? (
+                        <p className="mt-1 text-xs text-slate-700">
+                          <span className="font-semibold">Correct:</span> {row.correctAnswer}
+                        </p>
+                      ) : null}
+                      <p className="mt-2 text-xs leading-relaxed text-slate-600">{row.explanation}</p>
+                      <p className="mt-2 text-[11px] text-slate-500">
+                        Marks: {row.marksAwarded > 0 ? `+${row.marksAwarded}` : row.marksAwarded}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             {loop ? (
               <div className="mt-4 space-y-4 border-t border-slate-100 pt-4">
                 <div>
@@ -459,7 +790,7 @@ export function StudentExamsClient({ exams, plan }: Props) {
                 </div>
                 <button
                   type="button"
-                  onClick={() => void startExam(loop.retryExamId)}
+                  onClick={() => void startExam(loop.retryExamId || selectedExamId)}
                   className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800"
                 >
                   Retry this exam
@@ -557,7 +888,7 @@ export function StudentExamsClient({ exams, plan }: Props) {
             </p>
             <button
               type="button"
-              onClick={() => void startExam(continueTrainingTarget?.id)}
+              onClick={() => void startExam(continueTrainingTarget?.id || selectedExamId)}
               className="shrink-0 rounded-xl bg-gradient-to-r from-violet-500 to-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md"
             >
               👉 Continue training
@@ -565,6 +896,13 @@ export function StudentExamsClient({ exams, plan }: Props) {
           </div>
         </div>
       ) : null}
+
+      <UpgradeGateModal
+        open={upgradeGate.open}
+        variant={upgradeGate.variant ?? "default"}
+        message={upgradeGate.message}
+        onClose={() => setUpgradeGate((g) => ({ ...g, open: false }))}
+      />
     </div>
   );
 }

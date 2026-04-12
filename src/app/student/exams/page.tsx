@@ -7,11 +7,15 @@ export default async function StudentExamsPage() {
   const session = await getCurrentSession();
   if (!session) redirect("/auth/login");
 
-  const [exams, user] = await Promise.all([
+  const [exams, user, profile] = await Promise.all([
     prisma.exam.findMany({ orderBy: { createdAt: "desc" }, take: 20 }),
     prisma.user.findUnique({
       where: { id: session.userId },
       select: { plan: true },
+    }),
+    prisma.studentProfile.findUnique({
+      where: { userId: session.userId },
+      select: { exam: true },
     }),
   ]);
 
@@ -21,9 +25,13 @@ export default async function StudentExamsPage() {
         <header className="space-y-1">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Training</p>
           <h1 className="font-training-display text-3xl text-slate-900">Exam Engine</h1>
-          <p className="text-sm text-training-muted">Focused practice â€” clean runs, clear outcomes.</p>
+          <p className="text-sm text-training-muted">Focused practice — clean runs, clear outcomes.</p>
         </header>
-        <StudentExamsClient exams={exams} plan={user?.plan ?? "BASIC"} />
+        <StudentExamsClient
+          exams={exams}
+          plan={user?.plan ?? "BASIC"}
+          defaultExamTrack={profile?.exam?.trim() || null}
+        />
       </section>
     </div>
   );

@@ -48,7 +48,7 @@ export async function POST(req: Request) {
       },
     });
 
-    const token = signSessionToken({ userId: user.id });
+    const token = signSessionToken({ userId: user.id, onboardingCompleted: false });
     await setSessionCookie(token);
 
     return Response.json({

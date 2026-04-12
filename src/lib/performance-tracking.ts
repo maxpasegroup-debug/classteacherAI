@@ -62,8 +62,18 @@ export async function recordPerformanceAttemptMetrics(input: RecordAttemptMetric
   if (dup) return;
 
   const wrongSet = new Set(wrongIds);
-  const questions = await prisma.questionBank.findMany({ where: { id: { in: questionIds } } });
-  const qMap = new Map(questions.map((q) => [q.id, q]));
+  const [legacyQs, bankQs] = await Promise.all([
+    prisma.questionBank.findMany({ where: { id: { in: questionIds } } }),
+    prisma.question.findMany({ where: { id: { in: questionIds } } }),
+  ]);
+  type MetricQ = { id: string; level: string };
+  const qMap = new Map<string, MetricQ>();
+  for (const q of legacyQs) {
+    qMap.set(q.id, { id: q.id, level: q.level });
+  }
+  for (const q of bankQs) {
+    qMap.set(q.id, { id: q.id, level: `${q.difficulty} · ${q.topic}` });
+  }
 
   const questionCount = questionIds.length;
   const secondsPerQuestion = questionCount > 0 ? timeSpentSec / questionCount : 0;

@@ -1,3 +1,10 @@
+/** First integer in the string, or a safe default for analytics. */
+export function parseTargetRankNumber(targetRank: string): number {
+  const m = targetRank.trim().match(/\d+/);
+  if (!m) return 10_000;
+  return Math.max(1, parseInt(m[0], 10));
+}
+
 type StudentInputs = {
   targetRank: number;
   level: string;

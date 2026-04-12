@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { accessDeniedResponse } from "@/lib/plan-access";
 import { requireStudentFeature } from "@/lib/student-access";
 import { analysisCopy, practiceCopy } from "@/lib/top10-training-engine";
 
@@ -16,7 +17,18 @@ export async function POST(request: Request) {
 
   const gate = await requireStudentFeature(session.userId, "top10_training");
   if (!gate.ok) {
-    return NextResponse.json({ error: gate.error, code: gate.code }, { status: 403 });
+    if (gate.code === "NOT_FOUND") {
+      return NextResponse.json(
+        { success: false, upgradeRequired: false, message: gate.error, error: gate.error, code: gate.code },
+        { status: 404 },
+      );
+    }
+    return accessDeniedResponse({
+      ok: false,
+      upgradeRequired: gate.upgradeRequired ?? true,
+      message: gate.error,
+      code: gate.code,
+    });
   }
 
   const body = (await request.json().catch(() => null)) as { action?: Action } | null;
@@ -32,7 +44,7 @@ export async function POST(request: Request) {
 
   if (state.pendingRetry) {
     return NextResponse.json(
-      { error: "Retry required â€” analysis is locked until you pass the round.", code: "RETRY_LOCK" },
+      { error: "Retry required — analysis is locked until you pass the round.", code: "RETRY_LOCK" },
       { status: 409 },
     );
   }

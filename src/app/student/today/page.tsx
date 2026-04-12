@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth";
 import { applyPlanExpiry } from "@/lib/billing";
 import { prisma } from "@/lib/prisma";
+import { buildStudentRankProfile, parseTargetRankNumber } from "@/lib/student-profile";
 import { StudentTodayClient } from "@/components/student-today-client";
 
 export default async function StudentTodayPage() {
@@ -24,10 +25,8 @@ export default async function StudentTodayPage() {
           onboardingCompleted: true,
           targetRank: true,
           level: true,
-          trainingIntensity: true,
-          weakAreaFocus: true,
-          recommendedDailyQuestions: true,
-          difficultyStartLevel: true,
+          studyHours: true,
+          weakness: true,
         },
       },
     },
@@ -45,18 +44,27 @@ export default async function StudentTodayPage() {
     user.subscriptionStatus === "ACTIVE" &&
     Boolean(user.subscriptionExpiry && user.subscriptionExpiry > new Date());
 
+  const sp = user.studentProfile;
+  const rankN = parseTargetRankNumber(sp.targetRank);
+  const derived = buildStudentRankProfile({
+    targetRank: rankN,
+    level: sp.level,
+    studyHours: sp.studyHours,
+    weakness: sp.weakness,
+  });
+
   return (
     <StudentTodayClient
       previewOnly={!paidActive}
       userName={user.name}
       plan={user.plan}
       rankProfile={{
-        targetRank: user.studentProfile.targetRank,
-        level: user.studentProfile.level,
-        trainingIntensity: user.studentProfile.trainingIntensity,
-        weakAreaFocus: user.studentProfile.weakAreaFocus,
-        recommendedDailyQuestions: user.studentProfile.recommendedDailyQuestions,
-        difficultyStartLevel: user.studentProfile.difficultyStartLevel,
+        targetRankLabel: sp.targetRank,
+        level: sp.level,
+        trainingIntensity: derived.trainingIntensity,
+        weakAreaFocus: derived.weakAreaFocus,
+        recommendedDailyQuestions: derived.recommendedDailyQuestions,
+        difficultyStartLevel: derived.difficultyStartLevel,
       }}
     />
   );

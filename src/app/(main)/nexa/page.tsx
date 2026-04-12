@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { UpgradeGateModal } from "@/components/upgrade-gate-modal";
 import { isTopRankPlan } from "@/lib/plan-tier";
 
 type Mode = "TEACHER" | "STUDENT";
@@ -135,6 +136,7 @@ export default function NexaPage() {
   const [sending, setSending] = useState(false);
   const [listening, setListening] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [upgradeGate, setUpgradeGate] = useState<{ open: boolean; message: string }>({ open: false, message: "" });
   const messageEndRef = useRef<HTMLDivElement | null>(null);
 
   const studentCapList = useMemo(() => studentCapsForPlan(plan), [plan]);
@@ -309,13 +311,8 @@ export default function NexaPage() {
     event.preventDefault();
     const content = input.trim();
     if (!content || sending) return;
-    const basicStudent = plan === "BASIC";
     const proOut =
       (plan === "PRO" || plan === "ELITE") && credits !== null && credits <= 0;
-    if (basicStudent) {
-      setError("Nexa AI is not available on Starter. Upgrade to Pro, Elite, or TopRank.");
-      return;
-    }
     if (proOut) {
       setError("You have no AI credits. Buy credits or upgrade your plan to use Nexa AI.");
       return;
@@ -348,9 +345,15 @@ export default function NexaPage() {
       });
 
       if (!response.ok || !response.body) {
-        const data = await response.json().catch(() => null);
-        setError(data?.error ?? "Unable to get AI response.");
+        const data = (await response.json().catch(() => null)) as {
+          error?: string;
+          message?: string;
+          upgradeRequired?: boolean;
+        } | null;
+        const msg = data?.message ?? data?.error ?? "Unable to get AI response.";
+        setError(msg);
         setMessages((prev) => prev.filter((msg) => msg.id !== assistantMessageId && msg.id !== userMessage.id));
+        if (data?.upgradeRequired) setUpgradeGate({ open: true, message: msg });
         if (response.status === 402) {
           setCredits(0);
         }
@@ -423,7 +426,7 @@ export default function NexaPage() {
             ) : null}
             {plan === "BASIC" && mode === "STUDENT" ? (
               <span className="rounded-lg bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900">
-                Starter: upgrade for Nexa
+                Basic: 5 Nexa messages / day
               </span>
             ) : credits !== null ? (
               <span
@@ -572,17 +575,13 @@ export default function NexaPage() {
           />
           <button
             type="submit"
-            disabled={
-              sending ||
-              plan === "BASIC" ||
-              ((plan === "PRO" || plan === "ELITE") && credits !== null && credits <= 0)
-            }
+            disabled={sending || ((plan === "PRO" || plan === "ELITE") && credits !== null && credits <= 0)}
             className="rounded-xl bg-gradient-to-r from-blue-600 to-emerald-500 px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
           >
-            {plan === "BASIC"
-              ? "Upgrade for AI"
-              : plan === "PRO" || plan === "ELITE"
-                ? "Send (uses AI credits)"
+            {plan === "PRO" || plan === "ELITE"
+              ? "Send (uses AI credits)"
+              : plan === "BASIC"
+                ? "Send"
                 : "Send"}
           </button>
         </form>
@@ -601,6 +600,13 @@ export default function NexaPage() {
           </p>
         ) : null}
       </div>
+
+      <UpgradeGateModal
+        open={upgradeGate.open}
+        variant="toprank"
+        message={upgradeGate.message}
+        onClose={() => setUpgradeGate({ open: false, message: "" })}
+      />
     </section>
   );
 }

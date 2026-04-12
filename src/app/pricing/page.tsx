@@ -4,7 +4,13 @@ import Link from "next/link";
 import Script from "next/script";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { UpgradeModal } from "@/components/upgrade-modal";
-import { AI_ACCESS_RULES, CREDIT_TOP_UP_PACKS, PLANS, subscriptionTierLabel } from "@/lib/pricing";
+import {
+  AI_ACCESS_RULES,
+  CREDIT_TOP_UP_PACKS,
+  PLAN_FEATURE_MATRIX,
+  PLANS,
+  subscriptionTierLabel,
+} from "@/lib/pricing";
 import type { PurchaseKind } from "@/lib/payments";
 
 type UserData = {
@@ -15,10 +21,10 @@ type UserData = {
   subscriptionExpiry?: string | null;
 };
 
-type PlanPurchaseKind = "BASIC_MONTHLY" | "PRO" | "ELITE" | "TOPRANK";
+type PaidPlanKind = Extract<PurchaseKind, "PRO" | "ELITE" | "TOPRANK">;
 
 type ModalTarget =
-  | { kind: "plan"; plan: PlanPurchaseKind }
+  | { kind: "plan"; plan: PaidPlanKind }
   | { kind: "credits"; pack: "CREDITS_SMALL" | "CREDITS_LARGE" };
 
 const TIER_KEYS = ["BASIC", "PRO", "ELITE", "TOPRANK"] as const;
@@ -121,38 +127,28 @@ export default function PricingPage() {
 
   const creditBalance = user?.credits ?? 0;
 
-  function planModalTitle(plan: ModalTarget & { kind: "plan" }) {
-    if (plan.plan === "PRO") return `${PLANS.PRO.name} — ${PLANS.PRO.label}`;
-    if (plan.plan === "ELITE") return `${PLANS.ELITE.name} — ${PLANS.ELITE.label}`;
-    if (plan.plan === "TOPRANK") return `${PLANS.TOPRANK.name} — ${PLANS.TOPRANK.label}`;
-    return `${PLANS.BASIC.name} — monthly`;
+  function planModalTitle(plan: PaidPlanKind) {
+    if (plan === "PRO") return `${PLANS.PRO.name} — ${PLANS.PRO.label}`;
+    if (plan === "ELITE") return `${PLANS.ELITE.name} — ${PLANS.ELITE.label}`;
+    return `${PLANS.TOPRANK.name} — ${PLANS.TOPRANK.label}`;
   }
 
-  function planModalDescription(plan: ModalTarget & { kind: "plan" }) {
-    if (plan.plan === "PRO") return PLANS.PRO.summary;
-    if (plan.plan === "ELITE") return PLANS.ELITE.summary;
-    if (plan.plan === "TOPRANK") return PLANS.TOPRANK.summary;
-    return "Start your paid journey: limited exam attempts, basic analytics, and full platform access. Nexa coaching unlocks on Pro, Elite, or TopRank.";
+  function planModalDescription(plan: PaidPlanKind) {
+    if (plan === "PRO") return PLANS.PRO.summary;
+    if (plan === "ELITE") return PLANS.ELITE.summary;
+    return PLANS.TOPRANK.summary;
   }
 
-  function planModalDetail(plan: ModalTarget & { kind: "plan" }) {
-    if (plan.plan === "PRO") return `${PLANS.PRO.creditsIncluded.toLocaleString()} AI credits included each billing cycle.`;
-    if (plan.plan === "ELITE") return `${PLANS.ELITE.creditsIncluded.toLocaleString()} AI credits included each billing cycle.`;
-    if (plan.plan === "TOPRANK")
-      return `${PLANS.TOPRANK.creditsIncluded.toLocaleString()} AI credits included each billing cycle.`;
-    return `₹${PLANS.BASIC.priceInr}/month — billed monthly.`;
+  function planModalDetail(plan: PaidPlanKind) {
+    if (plan === "PRO") return `${PLANS.PRO.creditsIncluded.toLocaleString()} AI credits included each billing cycle.`;
+    if (plan === "ELITE") return `${PLANS.ELITE.creditsIncluded.toLocaleString()} AI credits included each billing cycle.`;
+    return `${PLANS.TOPRANK.creditsIncluded.toLocaleString()} AI credits included each billing cycle.`;
   }
 
-  function planModalAmount(plan: ModalTarget & { kind: "plan" }) {
-    if (plan.plan === "PRO") return PLANS.PRO.priceInr;
-    if (plan.plan === "ELITE") return PLANS.ELITE.priceInr;
-    if (plan.plan === "TOPRANK") return PLANS.TOPRANK.priceInr;
-    return PLANS.BASIC.priceInr;
-  }
-
-  function purchaseKindForTier(key: (typeof TIER_KEYS)[number]): PlanPurchaseKind {
-    if (key === "BASIC") return "BASIC_MONTHLY";
-    return key;
+  function planModalAmount(plan: PaidPlanKind) {
+    if (plan === "PRO") return PLANS.PRO.priceInr;
+    if (plan === "ELITE") return PLANS.ELITE.priceInr;
+    return PLANS.TOPRANK.priceInr;
   }
 
   return (
@@ -160,15 +156,18 @@ export default function PricingPage() {
       <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="afterInteractive" />
       <section className="mx-auto max-w-6xl space-y-6">
         <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h1 className="text-2xl font-semibold text-slate-900">Pricing</h1>
+          <h1 className="text-2xl font-semibold text-slate-900">Plans &amp; monetization</h1>
           <p className="mt-2 text-sm text-slate-600">
-            Pick Starter, Pro, Elite, or TopRank. Nexa AI follows your plan and credit balance.
+            Basic is free with quotas. Pro, Elite, and TopRank unlock training loops, Nexa limits, and TopRank hardcore
+            mode. When your paid period ends, you are downgraded to Basic automatically.
           </p>
           {user ? (
             <p className="mt-3 text-sm text-slate-700">
               Signed in as <span className="font-medium">{user.name ?? "Member"}</span> · Plan:{" "}
               <span className="font-medium">{subscriptionTierLabel(user.plan)}</span>
-              {!paidActive ? <span className="text-amber-700"> · Preview — subscribe to unlock features</span> : null}
+              {!paidActive && user.plan !== "BASIC" ? (
+                <span className="text-amber-700"> · Renew to restore paid features</span>
+              ) : null}
               {" · "}
               AI credits: <span className="font-medium">{creditBalance}</span>
               {user.subscriptionExpiry ? (
@@ -195,16 +194,17 @@ export default function PricingPage() {
         <div id="compare" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {TIER_KEYS.map((key) => {
             const p = PLANS[key];
-            const purchaseKey = purchaseKindForTier(key);
-            const isCurrent = Boolean(user && user.plan === key && paidActive);
             const isRecommended = key === recommendedKey;
+            const isCurrentBasic = Boolean(user && key === "BASIC" && user.plan === "BASIC");
+            const isCurrentPaid = Boolean(user && key !== "BASIC" && user.plan === key && paidActive);
+            const isCurrent = isCurrentBasic || isCurrentPaid;
 
             return (
               <article
                 key={key}
                 id={
                   key === "BASIC"
-                    ? "starter"
+                    ? "basic"
                     : key === "PRO"
                       ? "pro"
                       : key === "ELITE"
@@ -214,19 +214,21 @@ export default function PricingPage() {
                           : undefined
                 }
                 className={`flex flex-col rounded-2xl border p-5 shadow-sm ${
-                  isRecommended ? "border-blue-200 bg-blue-50/40" : "border-slate-200 bg-white"
+                  isRecommended ? "border-amber-300 bg-gradient-to-b from-amber-50/90 to-white ring-2 ring-amber-200/80" : "border-slate-200 bg-white"
                 }`}
               >
                 {isRecommended ? (
-                  <p className="text-xs font-semibold text-blue-700">Recommended for rank training</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-amber-900">Elite rank track</p>
                 ) : (
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{p.label}</p>
                 )}
                 <p className="mt-1 text-lg font-semibold text-slate-900">{p.name}</p>
                 <p className="mt-2 flex-1 text-sm text-slate-600">{p.summary}</p>
-                <p className="mt-4 text-2xl font-semibold text-slate-900">₹{p.priceInr}/mo</p>
+                <p className="mt-4 text-2xl font-semibold text-slate-900">
+                  {key === "BASIC" ? "Free" : `₹${p.priceInr}/mo`}
+                </p>
                 {key === "BASIC" ? (
-                  <p className="text-xs text-slate-500">Entry tier · AI coaching on Pro, Elite, or TopRank</p>
+                  <p className="text-xs text-slate-500">3 exams / UTC week · 5 Nexa messages / day</p>
                 ) : (
                   <p className="text-xs text-slate-500">{p.creditsIncluded.toLocaleString()} AI credits / cycle</p>
                 )}
@@ -234,13 +236,19 @@ export default function PricingPage() {
                   <p className="mt-4 rounded-lg bg-emerald-100 px-3 py-2 text-xs font-medium text-emerald-800">
                     Current plan
                   </p>
+                ) : key === "BASIC" ? (
+                  <p className="mt-4 rounded-lg bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700">
+                    Default for new accounts
+                  </p>
                 ) : (
                   <button
                     type="button"
-                    className="mt-4 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white"
-                    onClick={() => setModal({ kind: "plan", plan: purchaseKey })}
+                    className={`mt-4 rounded-xl px-4 py-2 text-sm font-semibold text-white ${
+                      isRecommended ? "bg-amber-600 hover:bg-amber-700" : "bg-slate-900 hover:bg-slate-800"
+                    }`}
+                    onClick={() => setModal({ kind: "plan", plan: key as PaidPlanKind })}
                   >
-                    {key === "BASIC" ? "Start with ₹499" : user && !paidActive ? "Subscribe" : "Upgrade"}
+                    Upgrade now
                   </button>
                 )}
               </article>
@@ -248,22 +256,51 @@ export default function PricingPage() {
           })}
         </div>
 
+        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="text-sm font-semibold text-slate-900">Feature access</h2>
+          <p className="mt-1 text-xs text-slate-500">Enforced server-side via the plan rule engine (exams, Nexa, training, TopRank).</p>
+          <table className="mt-4 w-full min-w-[640px] border-collapse text-left text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                <th className="py-2 pr-3 font-medium">Capability</th>
+                <th className="py-2 px-2 font-medium">Basic</th>
+                <th className="py-2 px-2 font-medium">Pro</th>
+                <th className="py-2 px-2 font-medium">Elite</th>
+                <th className="py-2 px-2 font-medium text-amber-900">TopRank</th>
+              </tr>
+            </thead>
+            <tbody>
+              {PLAN_FEATURE_MATRIX.map((row) => (
+                <tr key={row.label} className="border-b border-slate-100">
+                  <td className={`py-2 pr-3 font-medium text-slate-800 ${row.highlight ? "text-amber-950" : ""}`}>
+                    {row.label}
+                  </td>
+                  <td className="py-2 px-2 text-slate-600">{row.basic}</td>
+                  <td className="py-2 px-2 text-slate-600">{row.pro}</td>
+                  <td className="py-2 px-2 text-slate-600">{row.elite}</td>
+                  <td className="py-2 px-2 font-medium text-amber-950">{row.toprank}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-sm font-semibold text-slate-900">When can I use Nexa AI?</h2>
+          <h2 className="text-sm font-semibold text-slate-900">Nexa &amp; usage rules</h2>
           <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-slate-600">
             {AI_ACCESS_RULES.map((rule) => (
               <li key={rule}>{rule}</li>
             ))}
           </ul>
           <p className="mt-3 text-xs text-slate-500">
-            If your subscription expires, features lock until you renew Starter, Pro, Elite, or TopRank.
+            After expiry, paid plans downgrade to Basic and quotas tighten until you renew.
           </p>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="text-sm font-semibold text-slate-900">AI credit top-up</h2>
           <p className="mt-1 text-sm text-slate-600">
-            Extra AI credits while your Pro, Elite, or TopRank subscription is active. Not available on Starter-only
+            Extra AI credits while your Pro, Elite, or TopRank subscription is active. Not available on Basic-only
             accounts.
           </p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -303,10 +340,10 @@ export default function PricingPage() {
       {modal?.kind === "plan" ? (
         <UpgradeModal
           open
-          title={planModalTitle(modal)}
-          description={planModalDescription(modal)}
-          detail={planModalDetail(modal)}
-          amountInr={planModalAmount(modal)}
+          title={planModalTitle(modal.plan)}
+          description={planModalDescription(modal.plan)}
+          detail={planModalDetail(modal.plan)}
+          amountInr={planModalAmount(modal.plan)}
           loading={loading}
           onClose={() => setModal(null)}
           onConfirm={() => void launchPayment(modal.plan)}

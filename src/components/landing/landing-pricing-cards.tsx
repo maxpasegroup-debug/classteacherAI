@@ -5,25 +5,36 @@ import { motion } from "framer-motion";
 
 const tiers = [
   {
-    name: "Starter",
-    price: "₹499",
-    blurb: "Entry to the loop. Build the habit.",
+    name: "Basic",
+    price: "Free",
+    showPerMo: false,
+    blurb: "Limited exams & Nexa — start without a card.",
     highlight: false,
-    href: "/auth/signup",
+    href: "/pricing",
   },
   {
     name: "Pro",
-    price: "₹1,999",
-    blurb: "Full exams + Nexa depth.",
+    price: "₹499",
+    showPerMo: true,
+    blurb: "Training loop + Nexa credits. Weekly exam quota.",
     highlight: false,
-    href: "/auth/signup",
+    href: "/pricing",
+  },
+  {
+    name: "Elite",
+    price: "₹1,999",
+    showPerMo: true,
+    blurb: "Unlimited exams, full adaptive system.",
+    highlight: false,
+    href: "/pricing",
   },
   {
     name: "TopRank",
     price: "₹4,999",
-    blurb: "Adaptive camp. Forced gains. Exam sim.",
+    showPerMo: true,
+    blurb: "Hardcore loop, max difficulty, rank discipline.",
     highlight: true,
-    href: "/auth/signup",
+    href: "/pricing",
   },
 ];
 
@@ -35,7 +46,7 @@ export function LandingPricingCards() {
         <h2 className="mx-auto mt-3 max-w-lg text-center text-2xl font-semibold tracking-tight text-zinc-950 sm:text-3xl">
           One serious investment. Three levels of force.
         </h2>
-        <div className="mt-12 grid gap-4 md:grid-cols-3 md:gap-5">
+        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4 md:gap-5">
           {tiers.map((tier, i) => {
             const cardInner = (
               <>
@@ -47,7 +58,9 @@ export function LandingPricingCards() {
                 <h3 className={`text-lg font-semibold ${tier.highlight ? "text-white" : "text-zinc-900"}`}>{tier.name}</h3>
                 <p className={`mt-3 text-3xl font-semibold tracking-tight ${tier.highlight ? "text-white" : "text-zinc-950"}`}>
                   {tier.price}
-                  <span className={`text-sm font-normal ${tier.highlight ? "text-zinc-400" : "text-zinc-500"}`}>/mo</span>
+                  {tier.showPerMo ? (
+                    <span className={`text-sm font-normal ${tier.highlight ? "text-zinc-400" : "text-zinc-500"}`}>/mo</span>
+                  ) : null}
                 </p>
                 <p className={`mt-3 flex-1 text-sm leading-relaxed ${tier.highlight ? "text-zinc-300" : "text-zinc-600"}`}>
                   {tier.blurb}
@@ -60,7 +73,7 @@ export function LandingPricingCards() {
                       : "bg-zinc-900 text-white hover:bg-zinc-800"
                   }`}
                 >
-                  Start Now
+                  Upgrade now
                 </Link>
               </>
             );

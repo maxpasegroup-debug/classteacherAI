@@ -1,9 +1,15 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getCurrentSession } from "@/lib/auth";
-import { BASIC_EXAM_STARTS_PER_DAY } from "@/lib/billing";
+import {
+  inferExamTrackFromTitle,
+  parseQuestionOptions,
+  pickBalancedQuestionSet,
+  totalExpectedSeconds,
+} from "@/lib/bank-exam-selection";
 import { pickMixedDifficultyQuestions } from "@/lib/exam-question-selection";
 import { prisma } from "@/lib/prisma";
+import { accessDeniedResponse } from "@/lib/plan-access";
 import { requireStudentFeature } from "@/lib/student-access";
 import {
   isSameUtcDay,
@@ -15,6 +21,7 @@ import {
   utcDayStart,
   type TrainingModeApi,
 } from "@/lib/top10-training-engine";
+import type { Question as BankQuestion } from "@prisma/client";
 import { isTopRankPlan } from "@/lib/plan-tier";
 
 export const runtime = "nodejs";
@@ -39,8 +46,10 @@ export async function POST(request: Request) {
 
   const body = (await request.json().catch(() => null)) as {
     examId?: string;
+    /** Override exam track for structured bank (e.g. NEET, JEE). */
+    exam?: string | null;
     trainingMode?: TrainingModeApi;
-    /** Optional keyword â€” questions whose text contains it (topic drill). */
+    /** Optional keyword — questions whose text contains it (topic drill). */
     topicFocus?: string | null;
     /** Sample across easy / medium / hard levels. */
     mixedDifficulty?: boolean;
@@ -51,9 +60,18 @@ export async function POST(request: Request) {
   if (trainingMode === "top10") {
     const gate = await requireStudentFeature(session.userId, "top10_training");
     if (!gate.ok) {
-      const status =
-        gate.code === "EXPIRED" || gate.code === "SUBSCRIPTION" ? 403 : gate.code === "PLAN" ? 403 : 400;
-      return NextResponse.json({ error: gate.error, code: gate.code }, { status });
+      if (gate.code === "NOT_FOUND") {
+        return NextResponse.json(
+          { success: false, upgradeRequired: false, message: gate.error, error: gate.error, code: gate.code },
+          { status: 404 },
+        );
+      }
+      return accessDeniedResponse({
+        ok: false,
+        upgradeRequired: gate.upgradeRequired ?? true,
+        message: gate.error,
+        code: gate.code,
+      });
     }
 
     const exams = await prisma.exam.findMany({ orderBy: { createdAt: "desc" }, take: 30 });
@@ -172,22 +190,35 @@ export async function POST(request: Request) {
 
   const gate = await requireStudentFeature(session.userId, "exam_start");
   if (!gate.ok) {
-    const status =
-      gate.code === "EXPIRED" || gate.code === "SUBSCRIPTION" ? 403 : gate.code === "PLAN" ? 403 : 400;
-    return NextResponse.json({ error: gate.error, code: gate.code }, { status });
+    if (gate.code === "NOT_FOUND") {
+      return NextResponse.json(
+        { success: false, upgradeRequired: false, message: gate.error, error: gate.error, code: gate.code },
+        { status: 404 },
+      );
+    }
+    return accessDeniedResponse({
+      ok: false,
+      upgradeRequired: gate.upgradeRequired ?? true,
+      message: gate.error,
+      code: gate.code,
+    });
   }
 
-  if (gate.user.plan === "BASIC") {
-    const startOfDay = new Date();
-    startOfDay.setUTCHours(0, 0, 0, 0);
-    const startsToday = await prisma.examAttempt.count({
-      where: { userId: session.userId, startedAt: { gte: startOfDay } },
-    });
-    if (startsToday >= BASIC_EXAM_STARTS_PER_DAY) {
-      return NextResponse.json(
-        { error: "Daily exam limit reached on Basic. Upgrade for unlimited practice.", code: "RATE_LIMIT" },
-        { status: 429 },
-      );
+  if (trainingMode === "advanced") {
+    const adv = await requireStudentFeature(session.userId, "advanced_training");
+    if (!adv.ok) {
+      if (adv.code === "NOT_FOUND") {
+        return NextResponse.json(
+          { success: false, upgradeRequired: false, message: adv.error, error: adv.error, code: adv.code },
+          { status: 404 },
+        );
+      }
+      return accessDeniedResponse({
+        ok: false,
+        upgradeRequired: adv.upgradeRequired ?? true,
+        message: adv.error,
+        code: adv.code,
+      });
     }
   }
 
@@ -202,6 +233,99 @@ export async function POST(request: Request) {
 
   const order: "asc" | "desc" = trainingMode === "practice" ? "asc" : "desc";
   const targetCount = trainingMode === "practice" ? 15 : 18;
+
+  const examTrackOverride =
+    typeof body?.exam === "string" && body.exam.trim().length > 0 ? body.exam.trim().toUpperCase() : null;
+  const examTrack = examTrackOverride ?? inferExamTrackFromTitle(exam.title);
+
+  const bankPoolCount = await prisma.question.count({
+    where: { exam: examTrack, subject: exam.subject },
+  });
+
+  if (bankPoolCount >= 5) {
+    const qBase: Prisma.QuestionWhereInput = { exam: examTrack, subject: exam.subject };
+    const qWhere: Prisma.QuestionWhereInput = topicFocus
+      ? {
+          AND: [
+            qBase,
+            {
+              OR: [
+                { questionText: { contains: topicFocus, mode: "insensitive" } },
+                { topic: { contains: topicFocus, mode: "insensitive" } },
+                { subtopic: { contains: topicFocus, mode: "insensitive" } },
+                { explanation: { contains: topicFocus, mode: "insensitive" } },
+              ],
+            },
+          ],
+        }
+      : qBase;
+
+    let bankPool = await prisma.question.findMany({
+      where: qWhere,
+      take: 200,
+      orderBy: { createdAt: order },
+    });
+
+    if (topicFocus && bankPool.length < 5) {
+      bankPool = await prisma.question.findMany({
+        where: qBase,
+        take: 200,
+        orderBy: { createdAt: order },
+      });
+    }
+
+    const bankTarget = trainingMode === "practice" ? 14 : 18;
+    let selected: BankQuestion[] =
+      mixedDifficulty && bankPool.length > 0
+        ? pickBalancedQuestionSet(bankPool, bankTarget)
+        : shuffle([...bankPool]).slice(0, Math.min(bankTarget, bankPool.length));
+
+    if (selected.length === 0) {
+      return NextResponse.json(
+        { error: "No questions available for this paper in the structured bank.", code: "EMPTY_BANK" },
+        { status: 404 },
+      );
+    }
+
+    const maxMarks = selected.reduce((s, q) => s + q.marks, 0);
+    const allowedSeconds = totalExpectedSeconds(selected);
+    const bankAttempt = await prisma.attempt.create({
+      data: {
+        userId: session.userId,
+        exam: examTrack,
+        subject: exam.subject,
+        mode: trainingMode === "practice" ? "practice" : "test",
+        questionIds: selected.map((q) => q.id),
+        total: maxMarks,
+        allowedSeconds,
+      },
+    });
+
+    const deadlineAt = new Date(bankAttempt.createdAt.getTime() + allowedSeconds * 1000);
+
+    return NextResponse.json({
+      engine: "bank",
+      attemptId: bankAttempt.id,
+      exam,
+      startedAt: bankAttempt.createdAt,
+      deadlineAt: deadlineAt.toISOString(),
+      durationSec: allowedSeconds,
+      questions: selected.map((q) => ({
+        id: q.id,
+        question: q.questionText,
+        options: parseQuestionOptions(q.options),
+        marks: q.marks,
+      })),
+      trainingMeta: { trainingMode, difficulty: isTopRankPlan(gate.user.plan) ? 3 : 2 },
+      sessionMeta: {
+        timed: true,
+        autoEval: true,
+        topicFocus,
+        mixedDifficulty,
+        questionCount: selected.length,
+      },
+    });
+  }
 
   const focusedWhere: Prisma.QuestionBankWhereInput = { subject: exam.subject };
   if (topicFocus) {

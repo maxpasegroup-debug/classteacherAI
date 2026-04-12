@@ -5,7 +5,7 @@ import { PLANS } from "@/lib/pricing";
 /** Cost in credits per Nexa completion (PRO / ELITE). TopRank skips per-request deduction. */
 export const AI_REQUEST_CREDIT_COST = 1;
 
-/** BASIC: max exam starts per UTC day. */
+/** @deprecated Weekly limits live in `plan-access.ts` (BASIC_EXAMS_PER_UTC_WEEK). */
 export const BASIC_EXAM_STARTS_PER_DAY = 3;
 
 /** PRO / ELITE daily AI cap (abuse prevention). */

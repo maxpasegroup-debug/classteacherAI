@@ -79,6 +79,42 @@ type FullPayload = {
 
 type Payload = BasicPayload | FullPayload;
 
+type PerformanceIntelPayload = {
+  success: boolean;
+  overview: {
+    rank: number | null;
+    percentile: number | null;
+    accuracyPct: number | null;
+    avgSecondsPerQuestion: number | null;
+    totalSubmittedAttempts: number;
+    latestSubject: string | null;
+    latestAt: string | null;
+  };
+  analysis: {
+    weakTopics: string[];
+    speedIssues: string[];
+    accuracyProblems: string[];
+  };
+  progress: Array<{
+    at: string;
+    accuracyPct: number;
+    secondsPerQuestion: number;
+    subject: string;
+    examId: string;
+  }>;
+  topRank:
+    | { active: false }
+    | {
+        active: true;
+        difficulty: number;
+        pendingRetry: boolean;
+        weakTopics: string[];
+        lastAccuracyPct: number | null;
+        streakPasses: number;
+        hints: string[];
+      };
+};
+
 function isBasicPayload(p: Payload): p is BasicPayload {
   return "tier" in p && p.tier === "basic";
 }
@@ -221,8 +257,89 @@ function RankReadinessChart({ series }: { series: AdvancedPayload["rankReadiness
   );
 }
 
+function RankIntelPanel({ intel }: { intel: PerformanceIntelPayload | null }) {
+  if (!intel?.success) return null;
+  const { overview, analysis, topRank } = intel;
+  const hasRankSignal = overview.rank != null && overview.percentile != null;
+  const bullets = [
+    ...analysis.weakTopics.slice(0, 4).map((t) => ({ k: "Topic", t })),
+    ...analysis.speedIssues.slice(0, 2).map((t) => ({ k: "Speed", t })),
+    ...analysis.accuracyProblems.slice(0, 2).map((t) => ({ k: "Accuracy", t })),
+  ];
+
+  return (
+    <section className="grid gap-3 lg:grid-cols-3">
+      <CardUI title="Peer rank (latest attempt)" description="Versus others on the same exam track — updates when you submit.">
+        {hasRankSignal ? (
+          <>
+            <p className="text-2xl font-semibold text-slate-900">
+              #{overview.rank}
+              <span className="text-base font-normal text-slate-500"> / pool</span>
+            </p>
+            <p className="mt-1 text-sm text-slate-600">
+              ≈ {overview.percentile!.toFixed(0)}th percentile — you are ahead of about {overview.percentile!.toFixed(0)}% of
+              active peers on this key.
+            </p>
+            {overview.latestSubject ? (
+              <p className="mt-2 text-xs text-slate-500">Last: {overview.latestSubject}</p>
+            ) : null}
+          </>
+        ) : (
+          <p className="text-sm text-slate-500">Submit a timed mock to generate your first rank snapshot.</p>
+        )}
+      </CardUI>
+      <CardUI title="Speed (recent)" description="Mean seconds per question from graded attempts.">
+        <p className="text-2xl font-semibold text-slate-900">
+          {overview.avgSecondsPerQuestion != null ? `${overview.avgSecondsPerQuestion.toFixed(1)}s` : "—"}
+        </p>
+        <p className="mt-1 text-xs text-slate-500">{overview.totalSubmittedAttempts} submitted attempt(s) total</p>
+      </CardUI>
+      <CardUI title="Last attempt signals" description="Rule-based readout after each submit.">
+        {bullets.length === 0 ? (
+          <p className="text-sm text-slate-500">No structured signals yet.</p>
+        ) : (
+          <ul className="space-y-2 text-sm text-slate-700">
+            {bullets.map((b, i) => (
+              <li key={`${b.k}-${i}`}>
+                <span className="font-medium text-slate-800">{b.k}:</span> {b.t}
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardUI>
+      {topRank.active ? (
+        <CardUI
+          title="TopRank loop"
+          description="Hardcore track — higher difficulty, weak-topic focus, forced retry when below bar."
+          className="lg:col-span-3"
+        >
+          <div className="flex flex-wrap gap-3 text-sm text-slate-700">
+            <span className="rounded-full bg-violet-100 px-3 py-1 font-medium text-violet-900">
+              Difficulty tier {topRank.difficulty}
+            </span>
+            {topRank.pendingRetry ? (
+              <span className="rounded-full bg-amber-100 px-3 py-1 font-medium text-amber-900">Retry required</span>
+            ) : (
+              <span className="rounded-full bg-emerald-100 px-3 py-1 font-medium text-emerald-900">Clear to advance</span>
+            )}
+            <span className="text-slate-600">Streak passes: {topRank.streakPasses}</span>
+          </div>
+          {topRank.hints.length > 0 ? (
+            <ul className="mt-3 list-inside list-disc text-sm text-slate-600">
+              {topRank.hints.map((h) => (
+                <li key={h}>{h}</li>
+              ))}
+            </ul>
+          ) : null}
+        </CardUI>
+      ) : null}
+    </section>
+  );
+}
+
 export function StudentPerformanceClient() {
   const [data, setData] = useState<Payload | null>(null);
+  const [intel, setIntel] = useState<PerformanceIntelPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -230,17 +347,28 @@ export function StudentPerformanceClient() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/students/performance");
+      const [res, resIntel] = await Promise.all([
+        fetch("/api/students/performance"),
+        fetch("/api/performance"),
+      ]);
       const json = await res.json().catch(() => ({}));
+      const jsonIntel = await resIntel.json().catch(() => ({}));
       if (!res.ok) {
         setError(json.error ?? "Could not load performance.");
         setData(null);
+        setIntel(null);
         return;
       }
       setData(json as Payload);
+      setIntel(
+        resIntel.ok && (jsonIntel as PerformanceIntelPayload).success === true
+          ? (jsonIntel as PerformanceIntelPayload)
+          : null,
+      );
     } catch {
       setError("Network error.");
       setData(null);
+      setIntel(null);
     } finally {
       setLoading(false);
     }
@@ -271,6 +399,7 @@ export function StudentPerformanceClient() {
           </Link>{" "}
           for full analytics, charts, and AI insights.
         </p>
+        <RankIntelPanel intel={intel} />
         <section className="grid gap-3 sm:grid-cols-3">
           <CardUI title="Overall accuracy" description="Across submitted mocks.">
             <p className="text-2xl font-semibold text-slate-900">{summary.overallAccuracyPct.toFixed(1)}%</p>
@@ -319,6 +448,8 @@ export function StudentPerformanceClient() {
           from your real attempts — designed to make progress impossible to miss.
         </p>
       </div>
+
+      <RankIntelPanel intel={intel} />
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <CardUI title="Overall accuracy" description="Across all submitted mocks.">

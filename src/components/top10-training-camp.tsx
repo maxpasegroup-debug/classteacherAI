@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { pickMotivation } from "@/lib/top10-motivation";
+import { UpgradeGateModal } from "@/components/upgrade-gate-modal";
 import { InlineNotice } from "@/components/ui-states";
 import { ExamTakingView, type ExamAttemptPayload, type StartedQuestion } from "@/components/exam-taking-view";
 
@@ -126,14 +127,21 @@ export function Top10TrainingCamp() {
   const [analysisLines, setAnalysisLines] = useState<string[]>([]);
   const [practiceLines, setPracticeLines] = useState<string[]>([]);
   const [error, setError] = useState("");
+  const [upgradeGate, setUpgradeGate] = useState<{ open: boolean; message: string }>({ open: false, message: "" });
   const [loadingStart, setLoadingStart] = useState(false);
   const [campState, setCampState] = useState<Top10ServerState>(null);
 
   const refreshCampState = useCallback(async () => {
     try {
       const res = await fetch("/api/exam/top10/state");
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.state) {
+      const data = (await res.json().catch(() => ({}))) as {
+        state?: unknown;
+      };
+      if (!res.ok) {
+        setCampState(null);
+        return;
+      }
+      if (!data.state) {
         setCampState(null);
         return;
       }
@@ -213,9 +221,15 @@ export function Top10TrainingCamp() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ trainingMode: "top10" }),
       });
-      const data = await res.json().catch(() => ({}));
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        message?: string;
+        upgradeRequired?: boolean;
+      };
       if (!res.ok) {
-        setError(data.error ?? "Could not start TopRank round.");
+        const msg = data.message ?? data.error ?? "Could not start TopRank round.";
+        setError(msg);
+        if (data.upgradeRequired) setUpgradeGate({ open: true, message: msg });
         return;
       }
       const started = data as ExamAttemptPayload & { trainingMeta?: TrainingMeta };
@@ -251,10 +265,15 @@ export function Top10TrainingCamp() {
         questionId: q.id,
         answer: answers[q.id] ?? "",
       }));
+      const elapsedSec = Math.max(0, currentAttempt.durationSec - Math.max(0, secondsLeft));
       const res = await fetch("/api/exam/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ attemptId: currentAttempt.attemptId, answers: payloadAnswers }),
+        body: JSON.stringify({
+          attemptId: currentAttempt.attemptId,
+          answers: payloadAnswers,
+          timeTakenSec: elapsedSec,
+        }),
       });
       const data = (await res.json().catch(() => ({}))) as SubmitPayload & { error?: string };
       if (!res.ok) {
@@ -282,9 +301,18 @@ export function Top10TrainingCamp() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action }),
       });
-      const data = await res.json().catch(() => ({}));
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        message?: string;
+        upgradeRequired?: boolean;
+        lines?: string[];
+        phase?: string;
+        readyToStart?: boolean;
+      };
       if (!res.ok) {
-        setError(data.error ?? "Could not advance.");
+        const msg = data.message ?? data.error ?? "Could not advance.";
+        setError(msg);
+        if (data.upgradeRequired) setUpgradeGate({ open: true, message: msg });
         return;
       }
       if (action === "from_result" && data.lines) {
@@ -568,6 +596,13 @@ export function Top10TrainingCamp() {
           </button>
         </div>
       </div>
+
+      <UpgradeGateModal
+        open={upgradeGate.open}
+        variant="toprank"
+        message={upgradeGate.message}
+        onClose={() => setUpgradeGate({ open: false, message: "" })}
+      />
     </div>
   );
 }

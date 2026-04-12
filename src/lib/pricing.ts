@@ -8,32 +8,32 @@ import { isTopRankPlan } from "@/lib/plan-tier";
 export const PLANS = {
   BASIC: {
     key: "BASIC" as const,
-    name: "Starter",
-    label: "Starter",
-    priceInr: 499,
+    name: "Basic",
+    label: "Free",
+    priceInr: 0,
     creditsIncluded: 0,
-    aiEnabled: false,
+    aiEnabled: true,
     summary:
-      "Limited exam attempts, basic analytics, and full platform UI. No Nexa coaching — upgrade for AI-driven prep.",
+      "Start free: limited exams per week, 5 Nexa messages per day, core analytics. Upgrade for adaptive training and full coaching.",
   },
   PRO: {
     key: "PRO" as const,
     name: "Pro",
     label: "Pro",
-    priceInr: 1999,
+    priceInr: 499,
     creditsIncluded: 2000,
     aiEnabled: true,
     summary:
-      "Full exam system, adaptive tests, limited Nexa AI coaching (credits), performance analytics, and study help.",
+      "10 exams per week, adaptive training loop, Nexa (50 messages/day + credits), performance analytics — built for consistent rank prep.",
   },
   ELITE: {
     key: "ELITE" as const,
     name: "Elite",
     label: "Elite",
-    priceInr: 2999,
+    priceInr: 1999,
     creditsIncluded: 8000,
     aiEnabled: true,
-    summary: "Higher AI credit pool, full exam system, and advanced analytics — between Pro and TopRank.",
+    summary: "Unlimited exams, full Nexa token budget, adaptive system, larger credit pool — for serious contenders.",
   },
   TOPRANK: {
     key: "TOPRANK" as const,
@@ -43,9 +43,57 @@ export const PLANS = {
     creditsIncluded: 500_000,
     aiEnabled: true,
     summary:
-      "Full Nexa AI trainer (hardcore mode), continuous training loop, daily missions, weakness targeting, exam simulations, and rank readiness.",
+      "Hardcore rank trainer: TopRank loop, highest difficulty, fastest progression, maximum Nexa — full discipline mode.",
   },
 } as const;
+
+/** Matrix for /pricing — keys line up with PlanFeature + quotas. */
+export const PLAN_FEATURE_MATRIX: {
+  label: string;
+  basic: string;
+  pro: string;
+  elite: string;
+  toprank: string;
+  highlight?: boolean;
+}[] = [
+  {
+    label: "Exams (per UTC week)",
+    basic: "Up to 3",
+    pro: "Up to 10",
+    elite: "Unlimited",
+    toprank: "Unlimited",
+  },
+  {
+    label: "Adaptive training loop",
+    basic: "—",
+    pro: "Yes",
+    elite: "Yes",
+    toprank: "Yes (aggressive)",
+    highlight: true,
+  },
+  {
+    label: "Nexa AI",
+    basic: "5 messages / day",
+    pro: "50 messages / day + credits",
+    elite: "Full (high token cap)",
+    toprank: "Full (TopRank caps)",
+  },
+  {
+    label: "TopRank hardcore mode",
+    basic: "—",
+    pro: "—",
+    elite: "—",
+    toprank: "Yes",
+    highlight: true,
+  },
+  {
+    label: "Daily rank task API",
+    basic: "—",
+    pro: "Yes",
+    elite: "Yes",
+    toprank: "Yes",
+  },
+];
 
 /** User-visible plan name for a stored tier. */
 export function subscriptionTierLabel(plan: string): string {
@@ -73,7 +121,8 @@ export const CREDIT_TOP_UP_PACKS = {
 } as const;
 
 export const AI_ACCESS_RULES = [
-  "Starter: no Nexa AI; use Pro, Elite, or TopRank for coaching.",
-  "Pro / Elite: active billing period, AI credits > 0, daily request cap, daily token cap.",
-  "TopRank: active billing period; high token allowance with monitoring; no per-request credit deduction.",
+  "Basic (free): 3 exam starts per UTC week, 5 Nexa messages per day — no paid subscription required.",
+  "Pro: active subscription, 10 exams per week, adaptive training + Nexa (50 messages/day) with credits and token caps.",
+  "Elite: active subscription, unlimited exams, full Nexa allowance, adaptive system.",
+  "TopRank: active subscription, unlimited exams, hardcore TopRank loop, highest Nexa allowance.",
 ] as const;

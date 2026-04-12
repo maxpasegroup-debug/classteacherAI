@@ -23,8 +23,7 @@ export async function POST(request: Request) {
   }
 
   const kind = body.kind;
-  const isSubscription =
-    kind === "PRO" || kind === "ELITE" || kind === "TOPRANK" || kind === "BASIC_MONTHLY";
+  const isSubscription = kind === "PRO" || kind === "ELITE" || kind === "TOPRANK";
 
   await applyPlanExpiry(session.userId);
   const user = await prisma.user.findUnique({

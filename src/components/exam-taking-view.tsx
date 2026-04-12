@@ -14,6 +14,7 @@ export type StartedQuestion = {
   id: string;
   question: string;
   options: string[];
+  marks?: number;
 };
 
 export type ExamSessionMeta = {
@@ -114,7 +115,14 @@ export function ExamTakingView({
 
       {activeQuestion ? (
         <div className="rounded-xl border border-slate-100 p-3">
-          <p className="text-sm font-medium text-slate-900">{activeQuestion.question}</p>
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <p className="text-sm font-medium text-slate-900">{activeQuestion.question}</p>
+            {typeof activeQuestion.marks === "number" ? (
+              <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                +{activeQuestion.marks} marks
+              </span>
+            ) : null}
+          </div>
           <div className="mt-3 space-y-2">
             {activeQuestion.options.map((opt) => (
               <label

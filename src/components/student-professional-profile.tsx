@@ -35,6 +35,9 @@ type Vision = {
 };
 
 type Props = {
+  onboardingExam?: string | null;
+  onboardingTargetRank?: string | null;
+  peerRankSnapshot?: { rank: number; percentile: number | null } | null;
   user: {
     name: string;
     email: string;
@@ -86,7 +89,15 @@ function Row({ label, value, action }: { label: string; value: ReactNode; action
   );
 }
 
-export function StudentProfessionalProfile({ user, vision, stats, paidActive }: Props) {
+export function StudentProfessionalProfile({
+  user,
+  vision,
+  onboardingExam,
+  onboardingTargetRank,
+  peerRankSnapshot,
+  stats,
+  paidActive,
+}: Props) {
   const tier = subscriptionTierLabel(user.plan);
   const planBlock = planDetailsForTier(user.plan);
 
@@ -155,13 +166,21 @@ export function StudentProfessionalProfile({ user, vision, stats, paidActive }: 
             <Row label="Aspiration" value={<span className="text-zinc-400">{vision.dreamCollege}</span>} />
           </>
         ) : (
-          <div className="py-3 first:pt-0">
+          <div className="py-3 first:pt-0 space-y-3">
+            {onboardingExam ? (
+              <>
+                <Row label="Target exam (onboarding)" value={<span className="text-zinc-200">{onboardingExam}</span>} />
+                {onboardingTargetRank ? (
+                  <Row label="Target rank (onboarding)" value={<span className="text-zinc-200">{onboardingTargetRank}</span>} />
+                ) : null}
+              </>
+            ) : null}
             <p className="text-sm text-zinc-400">
               Set a dream rank and exam to personalize missions and training intensity.
             </p>
             <Link
               href="/student/toprank"
-              className="mt-3 inline-flex rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-500"
+              className="inline-flex rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-500"
             >
               Configure TopRank vision
             </Link>
@@ -211,6 +230,21 @@ export function StudentProfessionalProfile({ user, vision, stats, paidActive }: 
               <span className="tabular-nums text-zinc-100">{stats.rankReadiness} / 100</span>
             ) : (
               <span className="text-zinc-500">Build history with graded exams</span>
+            )
+          }
+        />
+        <Row
+          label="Peer rank (latest attempt)"
+          value={
+            peerRankSnapshot ? (
+              <span className="tabular-nums text-zinc-100">
+                #{peerRankSnapshot.rank}
+                {peerRankSnapshot.percentile != null
+                  ? ` · ~${Math.round(peerRankSnapshot.percentile)}th pct`
+                  : ""}
+              </span>
+            ) : (
+              <span className="text-zinc-500">Submit a graded exam to appear on the board</span>
             )
           }
         />

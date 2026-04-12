@@ -13,7 +13,7 @@ export default async function StudentProfilePage() {
 
   const userId = session.userId;
 
-  const [user, vision, attempts, nexaMem] = await Promise.all([
+  const [user, vision, attempts, nexaMem, studentProfile, latestPeerRank] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -46,6 +46,15 @@ export default async function StudentProfilePage() {
       where: { userId },
       select: { rankReadiness: true },
     }),
+    prisma.studentProfile.findUnique({
+      where: { userId },
+      select: { exam: true, targetRank: true },
+    }),
+    prisma.studentPerformance.findFirst({
+      where: { studentId: userId, rank: { not: null } },
+      orderBy: { createdAt: "desc" },
+      select: { rank: true, percentile: true },
+    }),
   ]);
 
   if (!user) redirect("/auth/login");
@@ -76,6 +85,13 @@ export default async function StudentProfilePage() {
         createdAt: user.createdAt,
       }}
       vision={vision}
+      onboardingExam={studentProfile?.exam ?? null}
+      onboardingTargetRank={studentProfile?.targetRank ?? null}
+      peerRankSnapshot={
+        latestPeerRank?.rank != null
+          ? { rank: latestPeerRank.rank, percentile: latestPeerRank.percentile }
+          : null
+      }
       stats={stats}
       paidActive={paidActive}
     />

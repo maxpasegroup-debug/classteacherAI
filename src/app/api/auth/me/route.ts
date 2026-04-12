@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCurrentSession } from "@/lib/auth";
+import { getCurrentSession, setSessionCookie, signSessionToken } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { applyPlanExpiry } from "@/lib/billing";
 
@@ -33,6 +33,11 @@ export async function GET() {
     }
 
     const onboardingCompleted = Boolean(user.studentProfile?.onboardingCompleted);
+
+    if (session.onboardingCompleted !== onboardingCompleted) {
+      const token = signSessionToken({ userId: session.userId, onboardingCompleted });
+      await setSessionCookie(token);
+    }
 
     return NextResponse.json({
       success: true,

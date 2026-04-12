@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentSession, setSessionCookie, signSessionToken } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { buildStudentRankProfile } from "@/lib/student-profile";
+import { parseTargetRankNumber } from "@/lib/student-profile";
 
 export const runtime = "nodejs";
 
@@ -21,10 +21,6 @@ export async function GET() {
         level: true,
         studyHours: true,
         weakness: true,
-        trainingIntensity: true,
-        recommendedDailyQuestions: true,
-        weakAreaFocus: true,
-        difficultyStartLevel: true,
       },
     });
 
@@ -48,61 +44,70 @@ export async function POST(request: Request) {
 
     const body = (await request.json().catch(() => null)) as
       | {
+          name?: string;
           exam?: string;
-          targetRank?: number;
+          targetRank?: string;
           level?: string;
           studyHours?: number;
           weakness?: string;
         }
       | null;
 
+    const name = body?.name?.trim();
     const exam = body?.exam?.trim();
     const level = body?.level?.trim();
     const weakness = body?.weakness?.trim();
-    const targetRank = Number(body?.targetRank);
+    const targetRankRaw = body?.targetRank?.trim() ?? "";
     const studyHours = Number(body?.studyHours);
 
-    if (!exam || !level || !weakness || !Number.isFinite(targetRank) || !Number.isFinite(studyHours)) {
+    if (!exam || !level || !weakness || !targetRankRaw || !Number.isFinite(studyHours)) {
       return NextResponse.json(
         { success: false, message: "Please complete all onboarding fields." },
         { status: 400 },
       );
     }
 
-    const generated = buildStudentRankProfile({
-      targetRank: Math.max(1, Math.floor(targetRank)),
-      level,
-      studyHours: Math.max(1, Math.floor(studyHours)),
-      weakness,
+    const hours = Math.max(1, Math.floor(studyHours));
+    if (!/\d/.test(targetRankRaw)) {
+      return NextResponse.json(
+        { success: false, message: "Please include a number in your target rank (e.g. 500 or AIR 500)." },
+        { status: 400 },
+      );
+    }
+    parseTargetRankNumber(targetRankRaw);
+
+    await prisma.$transaction(async (tx) => {
+      if (name && name.length > 0) {
+        await tx.user.update({
+          where: { id: session.userId },
+          data: { name },
+        });
+      }
+
+      await tx.studentProfile.upsert({
+        where: { userId: session.userId },
+        create: {
+          userId: session.userId,
+          exam,
+          targetRank: targetRankRaw,
+          level,
+          studyHours: hours,
+          weakness,
+          onboardingCompleted: true,
+        },
+        update: {
+          exam,
+          targetRank: targetRankRaw,
+          level,
+          studyHours: hours,
+          weakness,
+          onboardingCompleted: true,
+        },
+      });
     });
 
-    const profile = await prisma.studentProfile.upsert({
+    const profile = await prisma.studentProfile.findUnique({
       where: { userId: session.userId },
-      create: {
-        userId: session.userId,
-        exam,
-        targetRank: Math.max(1, Math.floor(targetRank)),
-        level,
-        studyHours: Math.max(1, Math.floor(studyHours)),
-        weakness,
-        onboardingCompleted: true,
-        trainingIntensity: generated.trainingIntensity,
-        recommendedDailyQuestions: generated.recommendedDailyQuestions,
-        weakAreaFocus: generated.weakAreaFocus,
-        difficultyStartLevel: generated.difficultyStartLevel,
-      },
-      update: {
-        exam,
-        targetRank: Math.max(1, Math.floor(targetRank)),
-        level,
-        studyHours: Math.max(1, Math.floor(studyHours)),
-        weakness,
-        onboardingCompleted: true,
-        trainingIntensity: generated.trainingIntensity,
-        recommendedDailyQuestions: generated.recommendedDailyQuestions,
-        weakAreaFocus: generated.weakAreaFocus,
-        difficultyStartLevel: generated.difficultyStartLevel,
-      },
       select: {
         onboardingCompleted: true,
         exam: true,
@@ -110,14 +115,10 @@ export async function POST(request: Request) {
         level: true,
         studyHours: true,
         weakness: true,
-        trainingIntensity: true,
-        recommendedDailyQuestions: true,
-        weakAreaFocus: true,
-        difficultyStartLevel: true,
       },
     });
 
-    const token = signSessionToken({ userId: session.userId });
+    const token = signSessionToken({ userId: session.userId, onboardingCompleted: true });
     await setSessionCookie(token);
 
     return NextResponse.json({ success: true, onboardingCompleted: true, profile });

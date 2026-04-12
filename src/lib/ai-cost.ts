@@ -7,8 +7,14 @@ export const ESTIMATED_CHARS_PER_TOKEN = 4;
 /** Reserve for model output before a streamed request (fail-safe pre-check). */
 export const STREAM_OUTPUT_RESERVE_TOKENS = 12_000;
 
-/** PRO / ELITE: hard daily token ceiling (prompt + completion), UTC day — paired with credits. */
+/** PRO: daily token ceiling (prompt + completion), UTC day — paired with credits + message cap. */
 export const PRO_DAILY_TOKEN_CAP = 250_000;
+
+/** Elite: higher token pool for “full Nexa” vs Pro. */
+export const ELITE_DAILY_TOKEN_CAP = 1_000_000;
+
+/** Basic free tier: small daily token pool for a few Nexa messages (paired with message count cap). */
+export const BASIC_DAILY_TOKEN_CAP = 72_000;
 
 /** TopRank: high allowance but bounded to prevent runaway cost. */
 export const TOPRANK_DAILY_TOKEN_CAP = 2_000_000;
@@ -26,7 +32,9 @@ export function estimateTokensFromMessages(messages: { content: string }[]): num
 }
 
 export function dailyTokenCapForPlan(plan: string): number {
-  if (plan === "PRO" || plan === "ELITE") return PRO_DAILY_TOKEN_CAP;
+  if (plan === "BASIC") return BASIC_DAILY_TOKEN_CAP;
+  if (plan === "PRO") return PRO_DAILY_TOKEN_CAP;
+  if (plan === "ELITE") return ELITE_DAILY_TOKEN_CAP;
   if (isTopRankPlan(plan)) return TOPRANK_DAILY_TOKEN_CAP;
   return 0;
 }
@@ -37,7 +45,7 @@ export type TokenBudgetFailure =
 
 /**
  * Fail-safe: block the request if today's usage + this request (prompt estimate + output reserve)
- * would exceed the plan's daily token cap. BASIC has no AI tokens (cap 0).
+ * would exceed the plan's daily token cap.
  */
 export function assertWithinDailyTokenBudget(params: {
   plan: string;

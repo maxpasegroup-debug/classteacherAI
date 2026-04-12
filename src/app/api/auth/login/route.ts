@@ -44,13 +44,19 @@ export async function POST(req: Request) {
 
     const refreshed = await prisma.user.findUnique({
       where: { id: user.id },
-      select: { id: true, name: true, email: true },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        studentProfile: { select: { onboardingCompleted: true } },
+      },
     });
     if (!refreshed) {
       return authJsonError("Login failed. Please try again.", 500);
     }
 
-    const token = signSessionToken({ userId: refreshed.id });
+    const onboardingCompleted = Boolean(refreshed.studentProfile?.onboardingCompleted);
+    const token = signSessionToken({ userId: refreshed.id, onboardingCompleted });
     await setSessionCookie(token);
 
     return Response.json({
@@ -60,7 +66,7 @@ export async function POST(req: Request) {
         name: refreshed.name,
         email: refreshed.email,
       },
-      redirectTo: "/dashboard",
+      redirectTo: onboardingCompleted ? "/dashboard" : "/onboarding",
     });
   } catch (error) {
     console.error("AUTH ERROR:", error);

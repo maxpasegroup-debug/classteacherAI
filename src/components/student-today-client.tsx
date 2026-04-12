@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { RootCareFunnelNudge } from "@/components/rootcare-funnel-nudge";
 import { UnlockRankJourneyModal } from "@/components/unlock-rank-journey-modal";
 import { TopRankVisionStrip } from "@/components/toprank-vision-strip";
+import { UpgradeGateModal } from "@/components/upgrade-gate-modal";
 import type { TopRankVisionDto } from "@/components/toprank-hub-client";
 
 type RankPayload = {
@@ -13,12 +14,27 @@ type RankPayload = {
   formula?: string;
 };
 
-type AttemptRow = {
-  id: string;
-  examId: string;
-  exam?: { title: string; subject?: string | null };
-  accuracyPct: number;
-  submittedAt: string | null;
+type HomePayload = {
+  success: boolean;
+  mission: {
+    dailyExamTarget: number;
+    todaySubmitted: number;
+    progressPct: number;
+    label: string;
+  };
+  streak: { days: number; label: string };
+  rank: {
+    peerRank: number | null;
+    percentile: number | null;
+    rankDeltaVsLast: number | null;
+    lastSubject: string | null;
+    overallAccuracyPct: number | null;
+  };
+  weakAreas: string[];
+  targetExam: string | null;
+  targetRankLabel: string | null;
+  lastAttempt: { title: string; submittedAt: string } | null;
+  notifications: string[];
 };
 
 type PreviewProps = {
@@ -26,7 +42,7 @@ type PreviewProps = {
   userName: string;
   plan: string;
   rankProfile?: {
-    targetRank: number;
+    targetRankLabel: string;
     level: string;
     trainingIntensity: string;
     weakAreaFocus: string;
@@ -37,12 +53,13 @@ type PreviewProps = {
 
 export function StudentTodayClient({ previewOnly, userName, plan, rankProfile }: PreviewProps) {
   const [unlockOpen, setUnlockOpen] = useState(previewOnly);
-  const [perfLoading, setPerfLoading] = useState(!previewOnly);
-  const [perfError, setPerfError] = useState("");
-  const [perfJson, setPerfJson] = useState<Record<string, unknown> | null>(null);
-  const [rank, setRank] = useState<RankPayload | null>(null);
-  const [attempts, setAttempts] = useState<AttemptRow[]>([]);
+  const [loading, setLoading] = useState(!previewOnly);
+  const [loadError, setLoadError] = useState("");
+  const [home, setHome] = useState<HomePayload | null>(null);
+  const [rankBoard, setRankBoard] = useState<RankPayload | null>(null);
   const [topVision, setTopVision] = useState<TopRankVisionDto | null | false>(false);
+  const [hubRefresh, setHubRefresh] = useState(0);
+  const [conversionOpen, setConversionOpen] = useState(false);
 
   useEffect(() => {
     setUnlockOpen(previewOnly);
@@ -50,29 +67,29 @@ export function StudentTodayClient({ previewOnly, userName, plan, rankProfile }:
 
   const loadHub = useCallback(async () => {
     if (previewOnly) return;
-    setPerfLoading(true);
-    setPerfError("");
+    setLoading(true);
+    setLoadError("");
     try {
-      const promises: Promise<Response>[] = [
-        fetch("/api/students/performance"),
-        fetch("/api/rank/leaderboard"),
-        fetch("/api/exam/attempts"),
-      ];
+      const promises: Promise<Response>[] = [fetch("/api/students/home"), fetch("/api/rank/leaderboard")];
       if (isTopRankPlan(plan)) {
         promises.push(fetch("/api/students/toprank/vision"));
       }
-      const [pRes, rRes, aRes, vRes] = await Promise.all(promises);
-      const pData = await pRes.json().catch(() => ({}));
-      if (!pRes.ok) {
-        setPerfJson(null);
-        setPerfError(typeof pData.error === "string" ? pData.error : "Stats unavailable.");
+      const results = await Promise.all(promises);
+      const hRes = results[0]!;
+      const rRes = results[1]!;
+      const vRes = results[2];
+
+      const hData = (await hRes.json().catch(() => ({}))) as HomePayload & { error?: string };
+      if (!hRes.ok || !hData.success) {
+        setHome(null);
+        setLoadError(typeof hData.error === "string" ? hData.error : "Could not load home.");
       } else {
-        setPerfJson(pData as Record<string, unknown>);
+        setHome(hData);
+        setHubRefresh((k) => k + 1);
       }
+
       const rData = await rRes.json().catch(() => ({}));
-      if (rRes.ok) setRank(rData as RankPayload);
-      const aData = await aRes.json().catch(() => ({}));
-      if (aRes.ok && Array.isArray(aData.attempts)) setAttempts(aData.attempts as AttemptRow[]);
+      if (rRes.ok) setRankBoard(rData as RankPayload);
 
       if (isTopRankPlan(plan) && vRes) {
         const vData = await vRes.json().catch(() => ({}));
@@ -85,9 +102,10 @@ export function StudentTodayClient({ previewOnly, userName, plan, rankProfile }:
         }
       }
     } catch {
-      setPerfError("Network error.");
+      setLoadError("Network error.");
+      setHome(null);
     } finally {
-      setPerfLoading(false);
+      setLoading(false);
     }
   }, [previewOnly, plan]);
 
@@ -95,66 +113,17 @@ export function StudentTodayClient({ previewOnly, userName, plan, rankProfile }:
     void loadHub();
   }, [loadHub]);
 
-  const summary = perfJson?.summary as
-    | {
-        overallAccuracyPct?: number;
-        streakDays?: number;
-        totalAttempts?: number;
-      }
-    | undefined;
+  const dailyRank = rankBoard?.daily?.yourRank;
+  const rankPool = rankBoard?.daily?.totalRanked ?? 0;
 
-  const weakTopics = perfJson?.weakTopics as Array<{ subject?: string; tip?: string }> | undefined;
-  const insights = perfJson?.insights as string[] | undefined;
-  const rankPred = perfJson?.rankPrediction as { headline?: string } | undefined;
-  const adv = perfJson?.advanced as { metrics?: { rankReadiness?: number } } | undefined;
-  const tier = perfJson?.tier as string | undefined;
+  const weakDisplay = useMemo(() => {
+    if (!home?.weakAreas?.length) {
+      return rankProfile?.weakAreaFocus ?? "Complete an exam to surface topic-level gaps.";
+    }
+    return home.weakAreas.slice(0, 3).join(" · ");
+  }, [home?.weakAreas, rankProfile?.weakAreaFocus]);
 
-  const accuracyPct = summary?.overallAccuracyPct ?? null;
-  const streak = summary?.streakDays ?? 0;
-  const totalAttempts = summary?.totalAttempts ?? attempts.length;
-  const rankReadiness = adv?.metrics?.rankReadiness ?? null;
-  const dailyRank = rank?.daily?.yourRank;
-  const rankPool = rank?.daily?.totalRanked ?? 0;
-
-  const rankScoreDisplay = useMemo(() => {
-    if (rankReadiness != null) return `${rankReadiness}`;
-    if (accuracyPct != null) return `${Math.round(accuracyPct)}`;
-    if (dailyRank != null) return `#${dailyRank}`;
-    return "—";
-  }, [rankReadiness, accuracyPct, dailyRank]);
-
-  const lastAttempt = attempts[0];
-
-  const mission = useMemo(() => {
-    if (previewOnly) return "Subscribe to unlock missions tailored to your weak topics.";
-    if (totalAttempts === 0) return "Baseline today: one timed practice set — log accuracy and enter the rank board.";
-    const w = weakTopics?.[0];
-    if (w?.subject) return `Priority block: drill ${w.subject} for 15 minutes, then one mixed review set.`;
-    return insights?.[0] ?? "Streak focus: one exam block plus one Nexa debrief while the pattern is fresh.";
-  }, [previewOnly, totalAttempts, weakTopics, insights]);
-
-  const nexaInsight = useMemo(() => {
-    if (previewOnly) return "Unlock Pro or TopRank for Nexa coaching wired to your exam memory.";
-    return (
-      rankPred?.headline ??
-      (isTopRankPlan(plan)
-        ? "Open Nexa Trainer — use your latest debrief to plan the next rep."
-        : "Open Nexa — ask for a tight plan on your weakest topic today.")
-    );
-  }, [previewOnly, rankPred, plan]);
-
-  const weakAlert =
-    weakTopics?.length && !previewOnly
-      ? weakTopics
-          .slice(0, 2)
-          .map((w) => w.subject)
-          .filter(Boolean)
-          .join(" · ")
-      : previewOnly
-        ? "Visible after you subscribe."
-        : totalAttempts === 0
-          ? "Complete a set to surface weak topics."
-          : "No critical gaps flagged — keep rotating subjects.";
+  const streakFire = home?.streak.days ? `🔥 ${home.streak.days} day streak` : "🔥 Start your streak";
 
   if (previewOnly) {
     return (
@@ -170,56 +139,144 @@ export function StudentTodayClient({ previewOnly, userName, plan, rankProfile }:
           </button>
         ) : null}
         <header className="space-y-1">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-zinc-500">Training hub</p>
-          <h1 className="text-2xl font-semibold tracking-tight text-white">Today</h1>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-zinc-500">Home</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-white">Dashboard</h1>
           <p className="text-sm text-zinc-400">Preview · Hi {userName}</p>
         </header>
         <div className="pointer-events-none select-none space-y-4 blur-[2.5px] opacity-55">
           <section className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-200/70">Mission</p>
-            <p className="mt-2 text-sm text-zinc-200">{mission}</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-200/70">Today&apos;s mission</p>
             <div className="mt-3 h-10 rounded-xl bg-zinc-800/80" />
           </section>
-          <section className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-4">
-            <p className="text-[10px] font-semibold text-zinc-500">Continue</p>
-            <div className="mt-3 h-9 rounded-xl bg-zinc-800/80" />
-          </section>
-          <div className="grid grid-cols-3 gap-2">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-20 rounded-xl border border-zinc-800 bg-zinc-900/40" />
-            ))}
-          </div>
-          <section className="rounded-2xl border border-violet-500/20 bg-violet-950/20 p-4">
-            <p className="text-[10px] font-semibold text-violet-300/80">Nexa insight</p>
-            <div className="mt-3 h-16 rounded-xl bg-zinc-800/60" />
-          </section>
+          <div className="h-12 rounded-xl bg-amber-400/30" />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <header className="space-y-1">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-zinc-500">Training hub</p>
-        <h1 className="text-2xl font-semibold tracking-tight text-white">Today</h1>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-zinc-500">Home</p>
+        <h1 className="text-2xl font-semibold tracking-tight text-white">Dashboard</h1>
         <p className="text-sm text-zinc-400">
-          Hi {userName} ·{" "}
-          {new Date().toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+          {userName} · {new Date().toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
         </p>
       </header>
 
+      {loadError ? (
+        <p className="rounded-xl border border-amber-500/30 bg-amber-950/30 px-3 py-2 text-xs text-amber-100">{loadError}</p>
+      ) : null}
+
+      {home?.notifications?.length ? (
+        <ul className="space-y-1.5 rounded-xl border border-zinc-800 bg-zinc-900/50 px-3 py-2">
+          {home.notifications.map((n) => (
+            <li key={n} className="text-xs text-zinc-300">
+              · {n}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      <section className="rounded-2xl border border-amber-500/35 bg-gradient-to-br from-amber-500/12 to-transparent p-4">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-200/90">Today&apos;s mission</p>
+        <p className="mt-1 text-xs text-zinc-400">
+          Target: {home?.mission.dailyExamTarget ?? 1} exam · Done today: {loading ? "…" : (home?.mission.todaySubmitted ?? 0)}
+        </p>
+        <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-zinc-800">
+          <div
+            className="h-full rounded-full bg-amber-400 transition-all duration-500"
+            style={{ width: `${loading ? 8 : home?.mission.progressPct ?? 0}%` }}
+          />
+        </div>
+        <p className="mt-2 text-sm text-zinc-200">{loading ? "Loading…" : home?.mission.label}</p>
+        <p className="mt-1 text-xs font-medium text-amber-200/90">{streakFire}</p>
+      </section>
+
+      <Link
+        href="/student/exams"
+        className="flex w-full items-center justify-center rounded-2xl bg-amber-400 py-4 text-base font-bold tracking-tight text-zinc-950 shadow-lg shadow-amber-500/25 transition hover:bg-amber-300"
+      >
+        Start exam
+      </Link>
+
+      <section className="rounded-2xl border border-zinc-800 bg-zinc-900/55 p-4">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Your rank</p>
+        {loading ? (
+          <p className="mt-2 text-sm text-zinc-500">Loading…</p>
+        ) : (
+          <>
+            <div className="mt-2 flex flex-wrap items-end gap-4">
+              <div>
+                <p className="text-[10px] text-zinc-500">Peer (last submit)</p>
+                <p className="text-2xl font-bold tabular-nums text-white">
+                  {home?.rank.peerRank != null ? `#${home.rank.peerRank}` : "—"}
+                </p>
+                {home?.rank.percentile != null ? (
+                  <p className="text-xs text-zinc-400">~{Math.round(home.rank.percentile)}th pct</p>
+                ) : null}
+              </div>
+              {dailyRank != null && rankPool > 0 ? (
+                <div>
+                  <p className="text-[10px] text-zinc-500">Leaderboard today</p>
+                  <p className="text-xl font-semibold text-white">
+                    #{dailyRank} <span className="text-sm font-normal text-zinc-500">/ {rankPool}</span>
+                  </p>
+                </div>
+              ) : null}
+              <div>
+                <p className="text-[10px] text-zinc-500">Avg accuracy</p>
+                <p className="text-xl font-semibold text-white">
+                  {home?.rank.overallAccuracyPct != null ? `${Math.round(home.rank.overallAccuracyPct)}%` : "—"}
+                </p>
+              </div>
+            </div>
+            {home?.rank.rankDeltaVsLast != null && home.rank.rankDeltaVsLast !== 0 ? (
+              <p className={`mt-2 text-xs font-medium ${home.rank.rankDeltaVsLast > 0 ? "text-emerald-400" : "text-amber-300"}`}>
+                {home.rank.rankDeltaVsLast > 0
+                  ? "↑ Rank improved vs last attempt (climbing the board)."
+                  : "Rank slipped vs last round — one focused set usually reverses this."}
+              </p>
+            ) : (
+              <p className="mt-2 text-xs text-zinc-500">Submit exams to build a rank trend.</p>
+            )}
+            {!isTopRankPlan(plan) && home?.rank.peerRank != null ? (
+              <button
+                type="button"
+                onClick={() => setConversionOpen(true)}
+                className="mt-3 text-xs font-semibold text-amber-300 underline decoration-amber-500/50"
+              >
+                Train like top rankers →
+              </button>
+            ) : null}
+          </>
+        )}
+      </section>
+
+      <section className="rounded-2xl border border-rose-500/25 bg-rose-950/20 p-4">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-rose-300/90">Weak areas</p>
+        <p className="mt-2 text-sm leading-relaxed text-zinc-200">{loading ? "Loading…" : weakDisplay}</p>
+        <Link href="/student/exams" className="mt-3 inline-block text-xs font-semibold text-rose-200 underline">
+          Fix in next exam →
+        </Link>
+      </section>
+
+      <section className="rounded-2xl border border-violet-500/30 bg-violet-950/25 p-4">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-violet-300/90">Nexa trainer</p>
+        <p className="mt-1 text-xs text-zinc-400">Quick debrief and next-step coaching.</p>
+        <Link
+          href="/nexa"
+          className="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-violet-500 py-3 text-sm font-semibold text-white hover:bg-violet-400"
+        >
+          Open Nexa
+        </Link>
+      </section>
+
       {rankProfile ? (
-        <section className="rounded-2xl border border-blue-500/25 bg-gradient-to-br from-blue-500/15 to-emerald-500/10 p-4">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-200/90">Your Rank Profile</p>
-          <div className="mt-2 grid grid-cols-2 gap-2 text-sm text-zinc-100">
-            <p>Target: Top {rankProfile.targetRank.toLocaleString("en-IN")}</p>
-            <p>Level: {rankProfile.level}</p>
-            <p>Strategy: {rankProfile.trainingIntensity}</p>
-            <p>Focus: {rankProfile.weakAreaFocus}</p>
-          </div>
-          <p className="mt-2 text-xs text-zinc-300">
-            Daily questions: {rankProfile.recommendedDailyQuestions} · Start level {rankProfile.difficultyStartLevel}
+        <section className="rounded-2xl border border-blue-500/20 bg-blue-950/20 p-3 text-xs text-zinc-300">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-300/80">Goal</p>
+          <p className="mt-1">
+            Target: {rankProfile.targetRankLabel} · {rankProfile.trainingIntensity}
           </p>
         </section>
       ) : null}
@@ -237,104 +294,41 @@ export function StudentTodayClient({ previewOnly, userName, plan, rankProfile }:
         )
       ) : null}
 
-      <section className="rounded-2xl border border-amber-500/30 bg-gradient-to-br from-amber-500/15 to-transparent p-4">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-200/90">Today&apos;s mission</p>
-        <p className="mt-2 text-sm font-medium leading-relaxed text-zinc-100">{mission}</p>
-        <div className="mt-4 flex flex-col gap-2">
-          <Link
-            href="/student/exams"
-            className="inline-flex w-full items-center justify-center rounded-xl bg-amber-400 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-amber-300"
-          >
-            Start training
-          </Link>
-          {isTopRankPlan(plan) ? (
-            <Link
-              href="/student/toprank"
-              className="inline-flex w-full items-center justify-center rounded-xl border border-violet-500/40 py-2.5 text-xs font-semibold text-violet-200"
-            >
-              TopRank hub & vision
-            </Link>
-          ) : null}
-        </div>
-      </section>
-
-      {!previewOnly ? (
-        <RootCareFunnelNudge variant="dashboard" refreshKey={attempts.length} />
-      ) : null}
-
-      <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Continue</p>
-        {perfLoading ? (
+      <section className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Last run</p>
+        {loading ? (
           <p className="mt-2 text-sm text-zinc-500">Loading…</p>
-        ) : lastAttempt?.exam?.title ? (
+        ) : home?.lastAttempt ? (
           <>
-            <p className="mt-2 text-sm text-zinc-200">Last run · {lastAttempt.exam.title}</p>
-            <p className="mt-0.5 text-xs text-zinc-500">
-              {lastAttempt.accuracyPct != null ? `${Math.round(lastAttempt.accuracyPct)}% accuracy` : null}
-            </p>
-            <Link
-              href="/student/exams"
-              className="mt-3 inline-flex w-full items-center justify-center rounded-xl border border-zinc-600 bg-zinc-950 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800"
-            >
-              Back to exam lab
-            </Link>
-          </>
-        ) : (
-          <>
-            <p className="mt-2 text-sm text-zinc-400">No finished attempts yet.</p>
+            <p className="mt-2 text-sm text-zinc-200">{home.lastAttempt.title}</p>
             <Link
               href="/student/exams"
               className="mt-3 inline-flex w-full items-center justify-center rounded-xl border border-zinc-600 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800"
             >
-              Open exam training
+              Start next challenge
+            </Link>
+          </>
+        ) : (
+          <>
+            <p className="mt-2 text-sm text-zinc-500">No finished attempt yet.</p>
+            <Link
+              href="/student/exams"
+              className="mt-3 inline-flex w-full items-center justify-center rounded-xl border border-zinc-600 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800"
+            >
+              First exam →
             </Link>
           </>
         )}
       </section>
 
-      <section className="grid grid-cols-3 gap-2">
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-3 text-center">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">Accuracy</p>
-          <p className="mt-1 text-lg font-semibold text-white">
-            {perfLoading ? "…" : accuracyPct != null ? `${Math.round(accuracyPct)}%` : "—"}
-          </p>
-          {tier === "basic" ? <p className="text-[9px] text-zinc-600">Basic</p> : null}
-        </div>
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-3 text-center">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">TopRank · readiness</p>
-          <p className="mt-1 text-lg font-semibold text-white">{perfLoading ? "…" : rankScoreDisplay}</p>
-          {dailyRank != null && rankPool > 0 ? (
-            <p className="text-[9px] text-zinc-500">
-              #{dailyRank} of {rankPool} today
-            </p>
-          ) : null}
-        </div>
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-3 text-center">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">Streak</p>
-          <p className="mt-1 text-lg font-semibold text-white">{perfLoading ? "…" : streak}</p>
-          <p className="text-[9px] text-zinc-500">days</p>
-        </div>
-      </section>
+      <RootCareFunnelNudge variant="dashboard" refreshKey={hubRefresh} />
 
-      <section className="rounded-2xl border border-red-500/20 bg-red-950/20 p-4">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-red-300/90">Weak areas</p>
-        <p className="mt-2 text-sm text-zinc-200">{perfLoading ? "Loading…" : weakAlert}</p>
-        <Link href="/student/performance" className="mt-3 inline-block text-xs font-semibold text-red-200 underline">
-          Full analytics →
-        </Link>
-      </section>
-
-      <section className="rounded-2xl border border-violet-500/25 bg-violet-950/25 p-4">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-violet-300/90">Nexa insight</p>
-        <p className="mt-2 text-sm text-zinc-200">{nexaInsight}</p>
-        {perfError ? <p className="mt-1 text-xs text-amber-200/80">{perfError}</p> : null}
-        <Link
-          href="/nexa"
-          className="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-violet-500 py-2.5 text-sm font-semibold text-white hover:bg-violet-400"
-        >
-          Open Nexa Trainer
-        </Link>
-      </section>
+      <UpgradeGateModal
+        open={conversionOpen}
+        variant="toprank"
+        message="See how elite students loop exams, debriefs, and retries — without dead ends between sessions."
+        onClose={() => setConversionOpen(false)}
+      />
     </div>
   );
 }
